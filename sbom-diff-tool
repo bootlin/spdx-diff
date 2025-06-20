@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+#
+# SPDX-License-Identifier: GPL-2.0
+
+import json
+import logging
+import sys
+import os
+import yaml  # pip install pyyaml
+from argparse import ArgumentParser
+from datetime import datetime
+
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+
+# SPDX SBOM package extraction and comparison
+def extract_packages(json_path):
+    logging.info(f"Opening SPDX file: {json_path}")
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    graph = data.get("graph") or data.get("@graph") or (data if isinstance(data, list) else [])
+    if not isinstance(graph, list):
+        logging.error("SPDX3 file format is not recognized.")
+        return {}
+
+    logging.info(f"Found {len(graph)} elements in the SPDX3 document.")
+    packages = {}
+    for item in graph:
+        if item.get("type") == "software_Package":
+            name = item.get("name")
+            version = item.get("software_packageVersion")
+            if not name or not version:
+                continue
+            # Filter out archives/URLs
+            if name.endswith(('.tar.gz', '.tar.xz', '.tar.bz2', '.zip')) or 'git' in name or name.startswith("http"):
+                continue
+            packages[name] = version
+    logging.info(f"Extracted {len(packages)} valid software packages.")
+    return packages
+
+
+def compare_packages(ref_pkgs, new_pkgs):
+    added = {n: v for n, v in new_pkgs.items() if n not in ref_pkgs}
+    removed = {n: v for n, v in ref_pkgs.items() if n not in new_pkgs}
+    changed = {n: {"from": ref_pkgs[n], "to": new_pkgs[n]} for n in ref_pkgs if n in new_pkgs and ref_pkgs[n] != new_pkgs[n]}
+    return added, removed, changed
+
+
+# Kernel diffconfig extraction and comparison
+def extract_kernel_config(config_path):
+    logging.info(f"Reading kernel config file: {config_path}")
+    config = {}
+    with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if '=' in line:
+                key, val = line.split('=', 1)
+                config[key.strip()] = val.strip()
+    logging.info(f"Extracted {len(config)} kernel config entries.")
+    return config
+
+
+def compare_kernel_config(ref_cfg, new_cfg):
+    added = {k: v for k, v in new_cfg.items() if k not in ref_cfg}
+    removed = {k: v for k, v in ref_cfg.items() if k not in new_cfg}
+    changed = {k: {"from": ref_cfg[k], "to": new_cfg[k]} for k in ref_cfg if k in new_cfg and ref_cfg[k] != new_cfg[k]}
+    return added, removed, changed
+
+
+def write_diff_to_yaml(added, removed, changed, output_file="diff_result.yaml"):
+    logging.info(f"Writing diff results to {output_file}")
+    delta = {
+        "added": dict(sorted(added.items())),
+        "removed": dict(sorted(removed.items())),
+        "changed": dict(sorted(changed.items())),
+    }
+    with open(output_file, "w") as f:
+        yaml.dump(delta, f, default_flow_style=False, sort_keys=False)
+
+
+def print_diff(added, removed, changed, show_all):
+    if show_all or added:
+        print("\nAdded:")
+        for k in sorted(added):
+            v = added[k]
+            if isinstance(v, dict):
+                print(f" + {k}: {v}")
+            else:
+                print(f" + {k}: {v}")
+
+    if show_all or removed:
+        print("\nRemoved:")
+        for k in sorted(removed):
+            v = removed[k]
+            if isinstance(v, dict):
+                print(f" - {k}: {v}")
+            else:
+                print(f" - {k}: {v}")
+
+    if show_all or changed:
+        print("\nChanged:")
+        for k in sorted(changed):
+            versions = changed[k]
+            print(f" ~ {k}: {versions['from']} → {versions['to']}")
+
+
+def main():
+    parser = ArgumentParser(description="Compare SPDX3 based SBOM JSON files or Linux kernel .config files")
+    parser.add_argument("reference", help="Reference file (SPDX3 JSON or kernel config)")
+    parser.add_argument("new", help="New file (SPDX3 JSON or kernel config)")
+    parser.add_argument("--mode", choices=["spdx", "kconfig"], required=True, help="Comparison mode: spdx or kconfig")
+    parser.add_argument("--full", action="store_true", help="Show full diff output (added, removed, changed)")
+    parser.add_argument("--output", default=None, help="Optional output file name (YAML)")
+
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.reference) or not os.path.isfile(args.new):
+        logging.error("One or both input files do not exist.")
+        sys.exit(1)
+
+    # Generate timestamped output file name if not explicitly provided
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if args.output is None:
+        args.output = f"{args.mode}_diff_{timestamp}.yaml"
+
+    if args.mode == "spdx":
+        ref_pkgs = extract_packages(args.reference)
+        new_pkgs = extract_packages(args.new)
+        added, removed, changed = compare_packages(ref_pkgs, new_pkgs)
+    else:  # diffconfig mode
+        ref_cfg = extract_kernel_config(args.reference)
+        new_cfg = extract_kernel_config(args.new)
+        added, removed, changed = compare_kernel_config(ref_cfg, new_cfg)
+
+    print_diff(added, removed, changed, args.full)
+    write_diff_to_yaml(added, removed, changed, args.output)
+
+
+if __name__ == "__main__":
+    main()
