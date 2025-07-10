@@ -6,11 +6,11 @@ import json
 import logging
 import sys
 import os
-import yaml  # pip install pyyaml
 from argparse import ArgumentParser
 from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+
 
 # SPDX SBOM package extraction and comparison
 def extract_packages(json_path):
@@ -69,15 +69,15 @@ def compare_kernel_config(ref_cfg, new_cfg):
     return added, removed, changed
 
 
-def write_diff_to_yaml(added, removed, changed, output_file="diff_result.yaml"):
+def write_diff_to_json(added, removed, changed, output_file="diff_result.json"):
     logging.info(f"Writing diff results to {output_file}")
     delta = {
         "added": dict(sorted(added.items())),
         "removed": dict(sorted(removed.items())),
         "changed": dict(sorted(changed.items())),
     }
-    with open(output_file, "w") as f:
-        yaml.dump(delta, f, default_flow_style=False, sort_keys=False)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(delta, f, indent=2, ensure_ascii=False)
 
 
 def print_diff(added, removed, changed, show_all):
@@ -85,19 +85,13 @@ def print_diff(added, removed, changed, show_all):
         print("\nAdded:")
         for k in sorted(added):
             v = added[k]
-            if isinstance(v, dict):
-                print(f" + {k}: {v}")
-            else:
-                print(f" + {k}: {v}")
+            print(f" + {k}: {v}")
 
     if show_all or removed:
         print("\nRemoved:")
         for k in sorted(removed):
             v = removed[k]
-            if isinstance(v, dict):
-                print(f" - {k}: {v}")
-            else:
-                print(f" - {k}: {v}")
+            print(f" - {k}: {v}")
 
     if show_all or changed:
         print("\nChanged:")
@@ -112,7 +106,7 @@ def main():
     parser.add_argument("new", help="New file (SPDX3 JSON or kernel config)")
     parser.add_argument("--mode", choices=["spdx", "kconfig"], required=True, help="Comparison mode: spdx or kconfig")
     parser.add_argument("--full", action="store_true", help="Show full diff output (added, removed, changed)")
-    parser.add_argument("--output", default=None, help="Optional output file name (YAML)")
+    parser.add_argument("--output", default=None, help="Optional output file name (JSON)")
 
     args = parser.parse_args()
 
@@ -123,7 +117,7 @@ def main():
     # Generate timestamped output file name if not explicitly provided
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.output is None:
-        args.output = f"{args.mode}_diff_{timestamp}.yaml"
+        args.output = f"{args.mode}_diff_{timestamp}.json"
 
     if args.mode == "spdx":
         ref_pkgs = extract_packages(args.reference)
@@ -135,7 +129,7 @@ def main():
         added, removed, changed = compare_kernel_config(ref_cfg, new_cfg)
 
     print_diff(added, removed, changed, args.full)
-    write_diff_to_yaml(added, removed, changed, args.output)
+    write_diff_to_json(added, removed, changed, args.output)
 
 
 if __name__ == "__main__":
