@@ -46,21 +46,37 @@ def compare_packages(ref_pkgs, new_pkgs):
     return added, removed, changed
 
 
-# Kernel diffconfig extraction and comparison
-def extract_kernel_config(config_path):
-    logging.info(f"Reading kernel config file: {config_path}")
-    config = {}
-    with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            if '=' in line:
-                key, val = line.split('=', 1)
-                config[key.strip()] = val.strip()
-    logging.info(f"Extracted {len(config)} kernel config entries.")
-    return config
+# Kernel config comparison from SPDX build_parameter entries
+def extract_kernel_config_from_spdx(spdx_path):
+    logging.info(f"Extracting kernel build parameters from SPDX: {spdx_path}")
+    with open(spdx_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
+    graph = data.get("graph") or data.get("@graph") or (data if isinstance(data, list) else [])
+    if not isinstance(graph, list):
+        logging.error("Invalid SPDX 3.0 format")
+        return {}
+
+    config = {}
+    build_count = 0
+
+    for item in graph:
+        if item.get("type", "").endswith("build_Build"):
+            build_count += 1
+            params = item.get("build_parameter", [])
+            if not isinstance(params, list):
+                continue
+            for param in params:
+                if isinstance(param, dict):
+                    key = param.get("key")
+                    value = param.get("value")
+                    if key and key.startswith("CONFIG_"):
+                        config[key] = value
+
+    if build_count == 0:
+        logging.warn("No build_Build objects found.")
+    logging.info(f"Parsed {len(config)} CONFIG_* entries from {build_count} build_Build object(s).")
+    return config
 
 def compare_kernel_config(ref_cfg, new_cfg):
     added = {k: v for k, v in new_cfg.items() if k not in ref_cfg}
@@ -101,9 +117,9 @@ def print_diff(added, removed, changed, show_all):
 
 
 def main():
-    parser = ArgumentParser(description="Compare SPDX3 based SBOM JSON files or Linux kernel .config files")
-    parser.add_argument("reference", help="Reference file (SPDX3 JSON or kernel config)")
-    parser.add_argument("new", help="New file (SPDX3 JSON or kernel config)")
+    parser = ArgumentParser(description="Compare SPDX3 JSON files or kernel config parameters")
+    parser.add_argument("reference", help="Reference SPDX3 JSON file")
+    parser.add_argument("new", help="New SPDX3 JSON file")
     parser.add_argument("--mode", choices=["spdx", "kconfig"], required=True, help="Comparison mode: spdx or kconfig")
     parser.add_argument("--full", action="store_true", help="Show full diff output (added, removed, changed)")
     parser.add_argument("--output", default=None, help="Optional output file name (JSON)")
@@ -114,7 +130,6 @@ def main():
         logging.error("One or both input files do not exist.")
         sys.exit(1)
 
-    # Generate timestamped output file name if not explicitly provided
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.output is None:
         args.output = f"{args.mode}_diff_{timestamp}.json"
@@ -123,9 +138,9 @@ def main():
         ref_pkgs = extract_packages(args.reference)
         new_pkgs = extract_packages(args.new)
         added, removed, changed = compare_packages(ref_pkgs, new_pkgs)
-    else:  # diffconfig mode
-        ref_cfg = extract_kernel_config(args.reference)
-        new_cfg = extract_kernel_config(args.new)
+    else:  # args.mode == "kconfig"
+        ref_cfg = extract_kernel_config_from_spdx(args.reference)
+        new_cfg = extract_kernel_config_from_spdx(args.new)
         added, removed, changed = compare_kernel_config(ref_cfg, new_cfg)
 
     print_diff(added, removed, changed, args.full)
@@ -134,3 +149,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
