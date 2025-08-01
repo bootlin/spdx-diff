@@ -12,8 +12,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
 
-# SPDX SBOM package extraction and comparison
-def extract_packages(json_path):
+def extract_spdx_data(json_path):
     logging.info(f"Opening SPDX file: {json_path}")
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -21,106 +20,117 @@ def extract_packages(json_path):
     graph = data.get("graph") or data.get("@graph") or (data if isinstance(data, list) else [])
     if not isinstance(graph, list):
         logging.error("SPDX3 file format is not recognized.")
-        return {}
+        return {}, {}, set()
 
     logging.info(f"Found {len(graph)} elements in the SPDX3 document.")
+
     packages = {}
+    config = {}
+    packageconfig_set = set()
+    build_count = 0
+
     for item in graph:
+        # Extract packages
         if item.get("type") == "software_Package":
             name = item.get("name")
             version = item.get("software_packageVersion")
             if not name or not version:
                 continue
-            # Filter out archives/URLs
             if name.endswith(('.tar.gz', '.tar.xz', '.tar.bz2', '.zip')) or 'git' in name or name.startswith("http"):
                 continue
             packages[name] = version
-    logging.info(f"Extracted {len(packages)} valid software packages.")
-    return packages
 
-
-def compare_packages(ref_pkgs, new_pkgs):
-    added = {n: v for n, v in new_pkgs.items() if n not in ref_pkgs}
-    removed = {n: v for n, v in ref_pkgs.items() if n not in new_pkgs}
-    changed = {n: {"from": ref_pkgs[n], "to": new_pkgs[n]} for n in ref_pkgs if n in new_pkgs and ref_pkgs[n] != new_pkgs[n]}
-    return added, removed, changed
-
-
-# Kernel config comparison from SPDX build_parameter entries
-def extract_kernel_config_from_spdx(spdx_path):
-    logging.info(f"Extracting kernel build parameters from SPDX: {spdx_path}")
-    with open(spdx_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    graph = data.get("graph") or data.get("@graph") or (data if isinstance(data, list) else [])
-    if not isinstance(graph, list):
-        logging.error("Invalid SPDX 3.0 format")
-        return {}
-
-    config = {}
-    build_count = 0
-
-    for item in graph:
+        # Extract kernel config and PACKAGECONFIG
         if item.get("type", "").endswith("build_Build"):
             build_count += 1
             params = item.get("build_parameter", [])
             if not isinstance(params, list):
                 continue
             for param in params:
-                if isinstance(param, dict):
-                    key = param.get("key")
-                    value = param.get("value")
-                    if key and key.startswith("CONFIG_"):
-                        config[key] = value
+                if not isinstance(param, dict):
+                    continue
+                key = param.get("key")
+                value = param.get("value")
+                if not key or value is None:
+                    continue
+
+                if key.startswith("CONFIG_"):
+                    config[key] = value
+                elif key.startswith("PACKAGECONFIG"):
+                    # Handles both PACKAGECONFIG and PACKAGECONFIG:<feature>
+                    if ":" in key:
+                        # e.g., PACKAGECONFIG:doc -> doc (if enabled)
+                        feature = key.split(":", 1)[1]
+                        if value == "enabled":
+                            packageconfig_set.add(feature)
+                    else:
+                        # value may be comma-separated string or a list
+                        if isinstance(value, str):
+                            entries = [x.strip() for x in value.split(",") if x.strip()]
+                            packageconfig_set.update(entries)
+                        elif isinstance(value, list):
+                            packageconfig_set.update(value)
 
     if build_count == 0:
-        logging.warn("No build_Build objects found.")
-    logging.info(f"Parsed {len(config)} CONFIG_* entries from {build_count} build_Build object(s).")
-    return config
+        logging.warning("No build_Build objects found.")
+    logging.info(f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, and {len(packageconfig_set)} PACKAGECONFIG entries.")
+    return packages, config, packageconfig_set
 
-def compare_kernel_config(ref_cfg, new_cfg):
-    added = {k: v for k, v in new_cfg.items() if k not in ref_cfg}
-    removed = {k: v for k, v in ref_cfg.items() if k not in new_cfg}
-    changed = {k: {"from": ref_cfg[k], "to": new_cfg[k]} for k in ref_cfg if k in new_cfg and ref_cfg[k] != new_cfg[k]}
+
+def compare_dicts(ref, new):
+    added = {k: v for k, v in new.items() if k not in ref}
+    removed = {k: v for k, v in ref.items() if k not in new}
+    changed = {k: {"from": ref[k], "to": new[k]} for k in ref if k in new and ref[k] != new[k]}
     return added, removed, changed
 
 
-def write_diff_to_json(added, removed, changed, output_file="diff_result.json"):
+def compare_sets(ref_set, new_set):
+    added = sorted(new_set - ref_set)
+    removed = sorted(ref_set - new_set)
+    return added, removed
+
+
+def print_diff(title, added, removed, changed=None, show_all=False):
+    if show_all or added:
+        print(f"\n{title} - Added:")
+        for k in sorted(added):
+            print(f" + {k}" if isinstance(k, str) else f" + {k}: {added[k]}")
+    if show_all or removed:
+        print(f"\n{title} - Removed:")
+        for k in sorted(removed):
+            print(f" - {k}" if isinstance(k, str) else f" - {k}: {removed[k]}")
+    if changed and (show_all or changed):
+        print(f"\n{title} - Changed:")
+        for k in sorted(changed):
+            print(f" ~ {k}: {changed[k]['from']} -> {changed[k]['to']}")
+
+
+def write_diff_to_json(pkg_diff, cfg_diff, pcfg_diff, output_file):
     logging.info(f"Writing diff results to {output_file}")
     delta = {
-        "added": dict(sorted(added.items())),
-        "removed": dict(sorted(removed.items())),
-        "changed": dict(sorted(changed.items())),
+        "package_diff": {
+            "added": dict(sorted(pkg_diff[0].items())),
+            "removed": dict(sorted(pkg_diff[1].items())),
+            "changed": dict(sorted(pkg_diff[2].items())),
+        },
+        "kernel_config_diff": {
+            "added": dict(sorted(cfg_diff[0].items())),
+            "removed": dict(sorted(cfg_diff[1].items())),
+            "changed": dict(sorted(cfg_diff[2].items())),
+        },
+        "packageconfig_diff": {
+            "added": pcfg_diff[0],
+            "removed": pcfg_diff[1],
+        },
     }
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(delta, f, indent=2, ensure_ascii=False)
 
 
-def print_diff(added, removed, changed, show_all):
-    if show_all or added:
-        print("\nAdded:")
-        for k in sorted(added):
-            v = added[k]
-            print(f" + {k}: {v}")
-
-    if show_all or removed:
-        print("\nRemoved:")
-        for k in sorted(removed):
-            v = removed[k]
-            print(f" - {k}: {v}")
-
-    if show_all or changed:
-        print("\nChanged:")
-        for k in sorted(changed):
-            versions = changed[k]
-            print(f" ~ {k}: {versions['from']} → {versions['to']}")
-
-
 def main():
-    parser = ArgumentParser(description="Compare SPDX3 JSON files or kernel config parameters")
+    parser = ArgumentParser(description="Compare SPDX3 JSON files for packages, kernel config, and PACKAGECONFIG")
     parser.add_argument("reference", help="Reference SPDX3 JSON file")
     parser.add_argument("new", help="New SPDX3 JSON file")
-    parser.add_argument("--mode", choices=["spdx", "kconfig"], required=True, help="Comparison mode: spdx or kconfig")
     parser.add_argument("--full", action="store_true", help="Show full diff output (added, removed, changed)")
     parser.add_argument("--output", default=None, help="Optional output file name (JSON)")
 
@@ -132,19 +142,20 @@ def main():
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.output is None:
-        args.output = f"{args.mode}_diff_{timestamp}.json"
+        args.output = f"spdx_diff_{timestamp}.json"
 
-    if args.mode == "spdx":
-        ref_pkgs = extract_packages(args.reference)
-        new_pkgs = extract_packages(args.new)
-        added, removed, changed = compare_packages(ref_pkgs, new_pkgs)
-    else:  # args.mode == "kconfig"
-        ref_cfg = extract_kernel_config_from_spdx(args.reference)
-        new_cfg = extract_kernel_config_from_spdx(args.new)
-        added, removed, changed = compare_kernel_config(ref_cfg, new_cfg)
+    ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(args.reference)
+    new_pkgs, new_cfg, new_pcfg = extract_spdx_data(args.new)
 
-    print_diff(added, removed, changed, args.full)
-    write_diff_to_json(added, removed, changed, args.output)
+    pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
+    cfg_diff = compare_dicts(ref_cfg, new_cfg)
+    pcfg_diff = compare_sets(ref_pcfg, new_pcfg)
+
+    print_diff("Packages", *pkg_diff, show_all=args.full)
+    print_diff("Kernel Config", *cfg_diff, show_all=args.full)
+    print_diff("PACKAGECONFIG", pcfg_diff[0], pcfg_diff[1], show_all=args.full)
+
+    write_diff_to_json(pkg_diff, cfg_diff, pcfg_diff, args.output)
 
 
 if __name__ == "__main__":
