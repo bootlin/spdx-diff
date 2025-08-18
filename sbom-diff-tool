@@ -12,7 +12,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
 
-def extract_spdx_data(json_path):
+def extract_spdx_data(json_path, ignore_proprietary=False):
     logging.info(f"Opening SPDX file: {json_path}")
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -34,7 +34,12 @@ def extract_spdx_data(json_path):
         if item.get("type") == "software_Package":
             name = item.get("name")
             version = item.get("software_packageVersion")
+            license_expr = item.get("simplelicensing_licenseExpression", "")
+
             if not name or not version:
+                continue
+            if ignore_proprietary and license_expr == "LicenseRef-Proprietary":
+                logging.info(f"Ignoring proprietary package: {name}")
                 continue
             if name.endswith(('.tar.gz', '.tar.xz', '.tar.bz2', '.zip')) or 'git' in name or name.startswith("http"):
                 continue
@@ -57,14 +62,11 @@ def extract_spdx_data(json_path):
                 if key.startswith("CONFIG_"):
                     config[key] = value
                 elif key.startswith("PACKAGECONFIG"):
-                    # Handles both PACKAGECONFIG and PACKAGECONFIG:<feature>
                     if ":" in key:
-                        # e.g., PACKAGECONFIG:doc -> doc (if enabled)
                         feature = key.split(":", 1)[1]
                         if value == "enabled":
                             packageconfig_set.add(feature)
                     else:
-                        # value may be comma-separated string or a list
                         if isinstance(value, str):
                             entries = [x.strip() for x in value.split(",") if x.strip()]
                             packageconfig_set.update(entries)
@@ -133,6 +135,7 @@ def main():
     parser.add_argument("new", help="New SPDX3 JSON file")
     parser.add_argument("--full", action="store_true", help="Show full diff output (added, removed, changed)")
     parser.add_argument("--output", default=None, help="Optional output file name (JSON)")
+    parser.add_argument("--ignore-proprietary", action="store_true", help="Ignore packages with LicenseRef-Proprietary")
 
     args = parser.parse_args()
 
@@ -144,8 +147,8 @@ def main():
     if args.output is None:
         args.output = f"spdx_diff_{timestamp}.json"
 
-    ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(args.reference)
-    new_pkgs, new_cfg, new_pcfg = extract_spdx_data(args.new)
+    ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(args.reference, ignore_proprietary=args.ignore_proprietary)
+    new_pkgs, new_cfg, new_pcfg = extract_spdx_data(args.new, ignore_proprietary=args.ignore_proprietary)
 
     pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
     cfg_diff = compare_dicts(ref_cfg, new_cfg)
