@@ -1,118 +1,99 @@
-# SBOM KernelDiff Tool
+SPDX3 Diff Tool
+===============
 
-A lightweight Python CLI tool to compare **SPDX3 SBOMs** or **Linux kernel config files**, and detect differences in software packages or kernel configuration.
+Overview
+--------
+This tool compares two SPDX3 JSON documents and reports differences in:
 
-## Features
+- Software packages (name + version)
+- Kernel configuration parameters (CONFIG_*)
+- PACKAGECONFIG entries
 
--  Compare two SPDX3 SBOM JSON files and detect:
-    -  Added, removed, and changed software packages
--  Compare two Linux kernel `.config` files:
-    -  Identify changes in kernel build options
--  Export diff results as YAML
+It produces both human-readable output (console) and a structured JSON diff file.
 
-# How to use
+Usage
+-----
+    ./sbom-diff-tool reference.json new.json [OPTIONS]
 
-## Command-line usage
+Required arguments:
+  reference              Path to the baseline SPDX3 JSON file.
+  new                    Path to the newer SPDX3 JSON file.
 
-### Basic Syntax
+Optional arguments:
+  --full                 Show all entries (added, removed, changed), not only differences.
+  --output <file>        Save diff results to the given JSON file.
+                         Default: spdx_diff_<timestamp>.json
+  --ignore-proprietary   Ignore packages with LicenseRef-Proprietary.
 
-```bash
-$ sbom-diff-tool <reference_file> <new_file> --mode [spdx|kconfig] [options]
+Output
+------
+The script prints differences grouped into three sections:
+
+1. Packages
+   - Added packages
+   - Removed packages
+   - Changed versions
+
+2. Kernel Config (CONFIG_*)
+   - Added keys
+   - Removed keys
+   - Modified values
+
+3. PACKAGECONFIG
+   - Features enabled in the new SPDX
+   - Features removed compared to reference
+
+Symbols:
+  + added
+  - removed
+  ~ changed
+
+JSON Diff File
+--------------
+The output file (default: spdx_diff_<timestamp>.json) contains a structured diff:
+```
+{
+  "package_diff": {
+    "added": { "pkgA": "1.2.3" },
+    "removed": { "pkgB": "4.5.6" },
+    "changed": { "pkgC": { "from": "1.0", "to": "2.0" } }
+  },
+  "kernel_config_diff": {
+    "added": { "CONFIG_XYZ": "y" },
+    "removed": { "CONFIG_ABC": "n" },
+    "changed": { "CONFIG_DEF": { "from": "m", "to": "y" } }
+  },
+  "packageconfig_diff": {
+    "added": ["feature1", "feature2"],
+    "removed": ["feature3"]
+  }
+}
 ```
 
-### Options
-
-| Option        | Description                                                |
-|---------------|------------------------------------------------------------|
-| `--mode`      | Comparison mode: `spdx` or `kconfig` (required)            |
-| `--full`      | Show full diff output, even if a section is empty          |
-| `--output`    | Output YAML file path                                      |
-
-## Example: SBOM Comparison
-
-```bash
-$ sbom-diff-tool old.spdx.json new.spdx.json --mode sbom --full
+Logging
+-------
+The script uses Python’s logging module:
+```
+  INFO     Normal operations (file opened, counts, etc.)
+  WARNING  Missing sections (no build_Build objects found)
+  ERROR    Invalid input or format issues
 ```
 
-**Example Output:**
+Example
+-------
+    ./sbom-diff-tool base.json new.json --ignore-proprietary --full --output diff.json
 
-Example bumping package version
+Console output:
 ```
-> ./sbom-diff-tool --mode spdx tests/test_spdx/new-package.spdx.json tests/test_spdx/new-package-version.spdx.json
-[INFO] Opening SPDX file: tests/test_spdx/new-package.spdx.json
-[INFO] Found 2361 elements in the SPDX3 document.
-[INFO] Extracted 37 valid software packages.
-[INFO] Opening SPDX file: tests/test_spdx/new-package-version.spdx.json
-[INFO] Found 2361 elements in the SPDX3 document.
-[INFO] Extracted 37 valid software packages.
+Packages - Added:
+ + libfoo: 2.0
 
-Changed:
- ~ i2c-tools: 4.3 → 4.4
-[INFO] Writing diff results to spdx_diff_20250620-164525.yaml
+Packages - Changed:
+ ~ zlib: 1.2.11 -> 1.2.13
+
+Kernel Config - Removed:
+ - CONFIG_OLD_FEATURE
+
+PACKAGECONFIG - Added:
+ + gtk
 ```
-
-YAML output
-
-```yaml
-added: {}
-removed: {}
-changed:
-  i2c-tools:
-    from: '4.3'
-    to: '4.4'
-```
-
-## Example: Kernel Config Comparison
-
-```bash
-$ sbom-diff-tool old.config new.config --mode kconfig --output kernel_diff.yaml
-```
-
-**Example Output:**
-
-Example adding new kernel configuration (n -> y)
-
-```
-> ./sbom-diff-tool --mode kconfig tests/test_kerneldiff/reference_kconfig tests/test_kerneldiff/kconfig5
-[INFO] Reading kernel config file: tests/test_kerneldiff/reference_kconfig
-[INFO] Extracted 586 kernel config entries.
-[INFO] Reading kernel config file: defconfig
-[INFO] Extracted 587 kernel config entries.
-
-Added:
- + CONFIG_PARPORT_1284: y
-[INFO] Writing diff results to kconfig_diff_20250620-162533.yaml
-```
-
-YAML output
-```yaml
-added:
-  CONFIG_PARPORT_1284: y
-removed: {}
-changed: {}
-```
-
-## Project Structure
-
-```text
-├── LICENSE
-├── README.md
-├── sbom-diff-tool
-└── tests
-    ├── test_kerneldiff # Tests related to kernel configuration comparisons
-    │   ├── kconfig1    # Change a component from y to n
-    │   ├── kconfig2    # Change a component from m to n
-    │   ├── kconfig3    # Change a component from y to m
-    │   ├── kconfig4    # Change a component from m to y
-    │   ├── kconfig5    # Change a component from n to y
-    │   ├── kconfig6    # Change a component from n to m
-    │   └── reference_kconfig
-    └── test_spdx             # Tests for SPDX SBOM comparison functionality
-        ├── new-package.spdx.json
-        ├── new-package-version.spdx.json
-        └── reference-sbom.spdx.json
-```
-
-# Dependencies
-
-* PyYAML: https://pypi.org/project/PyYAML/ for handling YAML.
