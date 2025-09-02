@@ -8,25 +8,46 @@ import sys
 import os
 from argparse import ArgumentParser
 from datetime import datetime
+from typing import Dict, Set, Tuple, List, Any
 
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 
-def extract_spdx_data(json_path, ignore_proprietary=False):
+def extract_spdx_data(
+    json_path: str, ignore_proprietary: bool = False
+) -> Tuple[Dict[str, str], Dict[str, Any], Set[str]]:
+    """
+    Extract SPDX package data, kernel CONFIG options, and PACKAGECONFIG entries
+    from a JSON file.
+
+    Args:
+        json_path (str): Path to the SPDX3 JSON file.
+        ignore_proprietary (bool): Whether to skip proprietary packages.
+
+    Returns:
+        tuple[dict, dict, set]:
+            - packages: mapping of package names to versions
+            - config: mapping of CONFIG_* keys to their values
+            - packageconfig_set: set of PACKAGECONFIG features
+    """
     logging.info(f"Opening SPDX file: {json_path}")
-    with open(json_path, 'r', encoding='utf-8') as f:
+    with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    graph = data.get("graph") or data.get("@graph") or (data if isinstance(data, list) else [])
+    graph = (
+        data.get("graph")
+        or data.get("@graph")
+        or (data if isinstance(data, list) else [])
+    )
     if not isinstance(graph, list):
         logging.error("SPDX3 file format is not recognized.")
         return {}, {}, set()
 
     logging.info(f"Found {len(graph)} elements in the SPDX3 document.")
 
-    packages = {}
-    config = {}
-    packageconfig_set = set()
+    packages: Dict[str, str] = {}
+    config: Dict[str, Any] = {}
+    packageconfig_set: Set[str] = set()
     build_count = 0
 
     for item in graph:
@@ -41,7 +62,11 @@ def extract_spdx_data(json_path, ignore_proprietary=False):
             if ignore_proprietary and license_expr == "LicenseRef-Proprietary":
                 logging.info(f"Ignoring proprietary package: {name}")
                 continue
-            if name.endswith(('.tar.gz', '.tar.xz', '.tar.bz2', '.zip')) or 'git' in name or name.startswith("http"):
+            if (
+                name.endswith((".tar.gz", ".tar.xz", ".tar.bz2", ".zip"))
+                or "git" in name
+                or name.startswith("http")
+            ):
                 continue
             packages[name] = version
 
@@ -75,39 +100,95 @@ def extract_spdx_data(json_path, ignore_proprietary=False):
 
     if build_count == 0:
         logging.warning("No build_Build objects found.")
-    logging.info(f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, and {len(packageconfig_set)} PACKAGECONFIG entries.")
+
+    logging.info(
+        f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, "
+        f"and {len(packageconfig_set)} PACKAGECONFIG entries."
+    )
     return packages, config, packageconfig_set
 
 
-def compare_dicts(ref, new):
+def compare_dicts(
+    ref: Dict[str, Any], new: Dict[str, Any]
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    """
+    Compare two dictionaries and return added, removed, and changed items.
+
+    Args:
+        ref (dict): Reference dictionary.
+        new (dict): New dictionary to compare.
+
+    Returns:
+        tuple[dict, dict, dict]: added, removed, changed items.
+    """
     added = {k: v for k, v in new.items() if k not in ref}
     removed = {k: v for k, v in ref.items() if k not in new}
-    changed = {k: {"from": ref[k], "to": new[k]} for k in ref if k in new and ref[k] != new[k]}
+    changed = {
+        k: {"from": ref[k], "to": new[k]} for k in ref if k in new and ref[k] != new[k]
+    }
     return added, removed, changed
 
 
-def compare_sets(ref_set, new_set):
+def compare_sets(ref_set: Set[str], new_set: Set[str]) -> Tuple[List[str], List[str]]:
+    """
+    Compare two sets and return sorted lists of added and removed items.
+
+    Args:
+        ref_set (set): Reference set.
+        new_set (set): New set to compare.
+
+    Returns:
+        tuple[list, list]: added, removed items.
+    """
     added = sorted(new_set - ref_set)
     removed = sorted(ref_set - new_set)
     return added, removed
 
 
-def print_diff(title, added, removed, changed=None, show_all=False):
+def print_diff(
+    title: str, added: Any, removed: Any, changed: Any = None, show_all: bool = False
+) -> None:
+    """
+    Print differences between items.
+
+    Args:
+        title (str): Section title.
+        added (dict or list): Added items.
+        removed (dict or list): Removed items.
+        changed (dict, optional): Changed items.
+        show_all (bool): Whether to show even if empty.
+    """
     if show_all or added:
         print(f"\n{title} - Added:")
-        for k in sorted(added):
-            print(f" + {k}" if isinstance(k, str) else f" + {k}: {added[k]}")
+        for k in sorted(added) if isinstance(added, dict) else added:
+            print(f" + {k}" if isinstance(added, list) else f" + {k}: {added[k]}")
+
     if show_all or removed:
         print(f"\n{title} - Removed:")
-        for k in sorted(removed):
-            print(f" - {k}" if isinstance(k, str) else f" - {k}: {removed[k]}")
+        for k in sorted(removed) if isinstance(removed, dict) else removed:
+            print(f" - {k}" if isinstance(removed, list) else f" - {k}: {removed[k]}")
+
     if changed and (show_all or changed):
         print(f"\n{title} - Changed:")
         for k in sorted(changed):
             print(f" ~ {k}: {changed[k]['from']} -> {changed[k]['to']}")
 
 
-def write_diff_to_json(pkg_diff, cfg_diff, pcfg_diff, output_file):
+def write_diff_to_json(
+    pkg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
+    cfg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
+    pcfg_diff: Tuple[List[str], List[str]],
+    output_file: str,
+) -> None:
+    """
+    Write diff results to a JSON file.
+
+    Args:
+        pkg_diff: Differences for packages.
+        cfg_diff: Differences for kernel config.
+        pcfg_diff: Differences for PACKAGECONFIG.
+        output_file: File path to write JSON.
+    """
     logging.info(f"Writing diff results to {output_file}")
     delta = {
         "package_diff": {
@@ -129,14 +210,28 @@ def write_diff_to_json(pkg_diff, cfg_diff, pcfg_diff, output_file):
         json.dump(delta, f, indent=2, ensure_ascii=False)
 
 
-def main():
-    parser = ArgumentParser(description="Compare SPDX3 JSON files for packages, kernel config, and PACKAGECONFIG")
+def main() -> None:
+    """
+    Main entry point: parse arguments, extract SPDX data, compare, and print/write diffs.
+    """
+    parser = ArgumentParser(
+        description="Compare SPDX3 JSON files for packages, kernel config, and PACKAGECONFIG"
+    )
     parser.add_argument("reference", help="Reference SPDX3 JSON file")
     parser.add_argument("new", help="New SPDX3 JSON file")
-    parser.add_argument("--full", action="store_true", help="Show full diff output (added, removed, changed)")
-    parser.add_argument("--output", default=None, help="Optional output file name (JSON)")
-    parser.add_argument("--ignore-proprietary", action="store_true", help="Ignore packages with LicenseRef-Proprietary")
-
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Show full diff output (added, removed, changed)",
+    )
+    parser.add_argument(
+        "--output", default=None, help="Optional output file name (JSON)"
+    )
+    parser.add_argument(
+        "--ignore-proprietary",
+        action="store_true",
+        help="Ignore packages with LicenseRef-Proprietary",
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.reference) or not os.path.isfile(args.new):
@@ -147,8 +242,12 @@ def main():
     if args.output is None:
         args.output = f"spdx_diff_{timestamp}.json"
 
-    ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(args.reference, ignore_proprietary=args.ignore_proprietary)
-    new_pkgs, new_cfg, new_pcfg = extract_spdx_data(args.new, ignore_proprietary=args.ignore_proprietary)
+    ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(
+        args.reference, ignore_proprietary=args.ignore_proprietary
+    )
+    new_pkgs, new_cfg, new_pcfg = extract_spdx_data(
+        args.new, ignore_proprietary=args.ignore_proprietary
+    )
 
     pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
     cfg_diff = compare_dicts(ref_cfg, new_cfg)
@@ -163,4 +262,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
