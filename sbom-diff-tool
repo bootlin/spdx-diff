@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 def extract_spdx_data(
     json_path: str, ignore_proprietary: bool = False
-) -> Tuple[Dict[str, str], Dict[str, Any], Set[str]]:
+) -> Tuple[Dict[str, str], Dict[str, Any], Dict[str, Dict[str, str]]]:
     """
     Extract SPDX package data, kernel CONFIG options, and PACKAGECONFIG entries
     from a JSON file.
@@ -25,10 +25,11 @@ def extract_spdx_data(
         ignore_proprietary (bool): Whether to skip proprietary packages.
 
     Returns:
-        tuple[dict, dict, set]:
+        tuple[dict, dict, dict]:
             - packages: mapping of package names to versions
             - config: mapping of CONFIG_* keys to their values
-            - packageconfig_set: set of PACKAGECONFIG features
+            - packageconfig_dict: mapping of package names to their PACKAGECONFIG features
+              Example: {"xz": {"doc": "disabled"}, "zstd-native": {"doc": "disabled", "lz4": "disabled"}}
     """
     logging.info(f"Opening SPDX file: {json_path}")
     with open(json_path, "r", encoding="utf-8") as f:
@@ -41,13 +42,13 @@ def extract_spdx_data(
     )
     if not isinstance(graph, list):
         logging.error("SPDX3 file format is not recognized.")
-        return {}, {}, set()
+        return {}, {}, {}
 
     logging.info(f"Found {len(graph)} elements in the SPDX3 document.")
 
     packages: Dict[str, str] = {}
     config: Dict[str, Any] = {}
-    packageconfig_set: Set[str] = set()
+    packageconfig_dict: Dict[str, Dict[str, str]] = {}
     build_count = 0
 
     for item in graph:
@@ -73,6 +74,13 @@ def extract_spdx_data(
         # Extract kernel config and PACKAGECONFIG
         if item.get("type", "").endswith("build_Build"):
             build_count += 1
+            
+            # Extract package name from the build name
+            build_name = item.get("name", "")
+            pkg_name = None
+            if ":" in build_name:
+                pkg_name = build_name.split(":")[0]
+            
             params = item.get("build_parameter", [])
             if not isinstance(params, list):
                 continue
@@ -87,25 +95,22 @@ def extract_spdx_data(
                 if key.startswith("CONFIG_"):
                     config[key] = value
                 elif key.startswith("PACKAGECONFIG"):
-                    if ":" in key:
-                        feature = key.split(":", 1)[1]
-                        if value == "enabled":
-                            packageconfig_set.add(feature)
-                    else:
-                        if isinstance(value, str):
-                            entries = [x.strip() for x in value.split(",") if x.strip()]
-                            packageconfig_set.update(entries)
-                        elif isinstance(value, list):
-                            packageconfig_set.update(value)
+                    if pkg_name:
+                        if pkg_name not in packageconfig_dict:
+                            packageconfig_dict[pkg_name] = {}
+                        
+                        if ":" in key:
+                            feature = key.split(":", 1)[1]
+                            packageconfig_dict[pkg_name][feature] = value
 
     if build_count == 0:
         logging.warning("No build_Build objects found.")
 
     logging.info(
         f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, "
-        f"and {len(packageconfig_set)} PACKAGECONFIG entries."
+        f"and {len(packageconfig_dict)} packages with PACKAGECONFIG entries."
     )
-    return packages, config, packageconfig_set
+    return packages, config, packageconfig_dict
 
 
 def compare_dicts(
@@ -129,20 +134,44 @@ def compare_dicts(
     return added, removed, changed
 
 
-def compare_sets(ref_set: Set[str], new_set: Set[str]) -> Tuple[List[str], List[str]]:
+def compare_packageconfig(
+    ref_pcfg: Dict[str, Dict[str, str]], new_pcfg: Dict[str, Dict[str, str]]
+) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]]:
     """
-    Compare two sets and return sorted lists of added and removed items.
+    Compare PACKAGECONFIG dictionaries.
 
     Args:
-        ref_set (set): Reference set.
-        new_set (set): New set to compare.
+        ref_pcfg: Reference PACKAGECONFIG mapping.
+        new_pcfg: New PACKAGECONFIG mapping.
 
     Returns:
-        tuple[list, list]: added, removed items.
+        tuple: added packages, removed packages, changed features per package.
     """
-    added = sorted(new_set - ref_set)
-    removed = sorted(ref_set - new_set)
-    return added, removed
+    added_pkgs = {k: v for k, v in new_pcfg.items() if k not in ref_pcfg}
+    removed_pkgs = {k: v for k, v in ref_pcfg.items() if k not in new_pcfg}
+    
+    changed_pkgs = {}
+    for pkg in ref_pcfg:
+        if pkg in new_pcfg:
+            ref_features = ref_pcfg[pkg]
+            new_features = new_pcfg[pkg]
+            
+            added_features = {k: v for k, v in new_features.items() if k not in ref_features}
+            removed_features = {k: v for k, v in ref_features.items() if k not in new_features}
+            changed_features = {
+                k: {"from": ref_features[k], "to": new_features[k]}
+                for k in ref_features
+                if k in new_features and ref_features[k] != new_features[k]
+            }
+            
+            if added_features or removed_features or changed_features:
+                changed_pkgs[pkg] = {
+                    "added": added_features,
+                    "removed": removed_features,
+                    "changed": changed_features,
+                }
+    
+    return added_pkgs, removed_pkgs, changed_pkgs
 
 
 def print_diff(
@@ -174,10 +203,55 @@ def print_diff(
             print(f" ~ {k}: {changed[k]['from']} -> {changed[k]['to']}")
 
 
+def print_packageconfig_diff(
+    added: Dict[str, Dict[str, str]],
+    removed: Dict[str, Dict[str, str]],
+    changed: Dict[str, Dict[str, Any]],
+    show_all: bool = False
+) -> None:
+    """
+    Print PACKAGECONFIG differences.
+
+    Args:
+        added: Added packages with their features.
+        removed: Removed packages with their features.
+        changed: Changed packages with feature differences.
+        show_all: Whether to show even if empty.
+    """
+    if show_all or added:
+        print(f"\nPACKAGECONFIG - Added Packages:")
+        for pkg in sorted(added):
+            print(f" + {pkg}:")
+            for feature, value in sorted(added[pkg].items()):
+                print(f"     {feature}: {value}")
+
+    if show_all or removed:
+        print(f"\nPACKAGECONFIG - Removed Packages:")
+        for pkg in sorted(removed):
+            print(f" - {pkg}:")
+            for feature, value in sorted(removed[pkg].items()):
+                print(f"     {feature}: {value}")
+
+    if show_all or changed:
+        print(f"\nPACKAGECONFIG - Changed Packages:")
+        for pkg in sorted(changed):
+            print(f" ~ {pkg}:")
+            pkg_changes = changed[pkg]
+            if pkg_changes.get("added"):
+                for feature, value in sorted(pkg_changes["added"].items()):
+                    print(f"     + {feature}: {value}")
+            if pkg_changes.get("removed"):
+                for feature, value in sorted(pkg_changes["removed"].items()):
+                    print(f"     - {feature}: {value}")
+            if pkg_changes.get("changed"):
+                for feature, change in sorted(pkg_changes["changed"].items()):
+                    print(f"     ~ {feature}: {change['from']} -> {change['to']}")
+
+
 def write_diff_to_json(
     pkg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
     cfg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    pcfg_diff: Tuple[List[str], List[str]],
+    pcfg_diff: Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]],
     output_file: str,
 ) -> None:
     """
@@ -202,8 +276,9 @@ def write_diff_to_json(
             "changed": dict(sorted(cfg_diff[2].items())),
         },
         "packageconfig_diff": {
-            "added": pcfg_diff[0],
-            "removed": pcfg_diff[1],
+            "added": dict(sorted(pcfg_diff[0].items())),
+            "removed": dict(sorted(pcfg_diff[1].items())),
+            "changed": dict(sorted(pcfg_diff[2].items())),
         },
     }
     with open(output_file, "w", encoding="utf-8") as f:
@@ -251,11 +326,11 @@ def main() -> None:
 
     pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
     cfg_diff = compare_dicts(ref_cfg, new_cfg)
-    pcfg_diff = compare_sets(ref_pcfg, new_pcfg)
+    pcfg_diff = compare_packageconfig(ref_pcfg, new_pcfg)
 
     print_diff("Packages", *pkg_diff, show_all=args.full)
     print_diff("Kernel Config", *cfg_diff, show_all=args.full)
-    print_diff("PACKAGECONFIG", pcfg_diff[0], pcfg_diff[1], show_all=args.full)
+    print_packageconfig_diff(*pcfg_diff, show_all=args.full)
 
     write_diff_to_json(pkg_diff, cfg_diff, pcfg_diff, args.output)
 
