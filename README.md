@@ -4,10 +4,9 @@ SPDX3 Diff Tool
 Overview
 --------
 This tool compares two SPDX3 JSON documents and reports differences in:
-
 - Software packages (name + version)
 - Kernel configuration parameters (CONFIG_*)
-- PACKAGECONFIG entries
+- PACKAGECONFIG entries per package
 
 It produces both human-readable output (console) and a structured JSON diff file.
 
@@ -24,6 +23,12 @@ Optional arguments:
   --output <file>        Save diff results to the given JSON file.
                          Default: spdx_diff_<timestamp>.json
   --ignore-proprietary   Ignore packages with LicenseRef-Proprietary.
+  --summary              Show only summary statistics without detailed differences.
+  --format {text,json,both}
+                         Control output format:
+                         - text: Console output only (no JSON file)
+                         - json: JSON file only (silent mode for automation)
+                         - both: Both console and JSON output (default)
 
 Output
 ------
@@ -35,23 +40,52 @@ The script prints differences grouped into three sections:
    - Changed versions
 
 2. Kernel Config (CONFIG_*)
-   - Added keys
-   - Removed keys
-   - Modified values
+   - Added options
+   - Removed options
+   - Modified options
 
-3. PACKAGECONFIG
-   - Features enabled in the new SPDX
-   - Features removed compared to reference
+3. PACKAGECONFIG (per package)
+   - Packages with added PACKAGECONFIG entries
+   - Packages with removed PACKAGECONFIG entries
+   - Packages with changed feature configurations
+   - Shows package name and associated features
 
 Symbols:
   + added
   - removed
   ~ changed
 
+Summary Mode
+------------
+When using --summary, the tool displays aggregate statistics:
+
+```
+SPDX-SBOM-Diff Summary:
+
+Packages:
+  Added:   5
+  Removed: 2
+  Changed: 3
+
+Kernel Config:
+  Added:   10
+  Removed: 3
+  Changed: 7
+
+PACKAGECONFIG:
+  Packages Added:   2
+  Packages Removed: 1
+  Packages Changed: 8
+  Features Added:   12
+  Features Removed: 4
+  Features Changed: 6
+```
+
 JSON Diff File
 --------------
 The output file (default: spdx_diff_<timestamp>.json) contains a structured diff:
-```
+
+```json
 {
   "package_diff": {
     "added": { "pkgA": "1.2.3" },
@@ -64,26 +98,71 @@ The output file (default: spdx_diff_<timestamp>.json) contains a structured diff
     "changed": { "CONFIG_DEF": { "from": "m", "to": "y" } }
   },
   "packageconfig_diff": {
-    "added": ["feature1", "feature2"],
-    "removed": ["feature3"]
+    "added": {
+      "xz": { "doc": "enabled" }
+    },
+    "removed": {
+      "old-package": { "feature1": "disabled" }
+    },
+    "changed": {
+      "zstd-native": {
+        "added": { "zlib": "enabled" },
+        "removed": { "lz4": "disabled" },
+        "changed": {
+          "doc": { "from": "disabled", "to": "enabled" }
+        }
+      }
+    }
   }
 }
 ```
 
+PACKAGECONFIG Structure
+-----------------------
+PACKAGECONFIG entries are tracked per package, showing which features are enabled/disabled for each specific package:
+
+Console output example:
+```
+PACKAGECONFIG - Changed Packages:
+ ~ xz:
+     + doc: enabled
+ ~ zstd-native:
+     ~ lz4: disabled -> enabled
+     - lzma: disabled
+```
+
+This shows:
+- xz package: doc feature was added and enabled
+- zstd-native package: lz4 changed from disabled to enabled, lzma was removed
+
 Logging
 -------
-The script uses Python’s logging module:
+The script uses Python's logging module:
 ```
   INFO     Normal operations (file opened, counts, etc.)
   WARNING  Missing sections (no build_Build objects found)
   ERROR    Invalid input or format issues
 ```
 
-Example
--------
-    ./sbom-diff-tool base.json new.json --ignore-proprietary --full --output diff.json
+Examples
+--------
 
-Console output:
+### Basic comparison with both console and JSON output:
+    ./sbom-diff-tool reference.json new.json
+
+### Full details with proprietary packages excluded:
+    ./sbom-diff-tool reference.json new.json --ignore-proprietary --full
+
+### Quick summary check:
+    ./sbom-diff-tool reference.json new.json --summary
+
+### Silent mode for CI/CD (JSON output only):
+    ./sbom-diff-tool reference.json new.json --format json --output results.json
+
+### Console output only (no JSON file):
+    ./sbom-diff-tool reference.json new.json --format text --full
+
+Console output example:
 ```
 Packages - Added:
  + libfoo: 2.0
@@ -94,6 +173,12 @@ Packages - Changed:
 Kernel Config - Removed:
  - CONFIG_OLD_FEATURE
 
-PACKAGECONFIG - Added:
- + gtk
+PACKAGECONFIG - Added Packages:
+ + newpkg:
+     gtk: enabled
+     doc: disabled
+
+PACKAGECONFIG - Changed Packages:
+ ~ xz:
+     + lzma: enabled
 ```
