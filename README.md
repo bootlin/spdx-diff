@@ -30,6 +30,16 @@ Optional arguments:
                          - json: JSON file only (silent mode for automation)
                          - both: Both console and JSON output (default)
 
+Output filtering - change type:
+  --show-added           Show only added items.
+  --show-removed         Show only removed items.
+  --show-changed         Show only changed items.
+
+Output filtering - category:
+  --show-packages        Show only package differences.
+  --show-config          Show only kernel config differences.
+  --show-packageconfig   Show only PACKAGECONFIG differences.
+
 Output
 ------
 The script prints differences grouped into three sections:
@@ -73,9 +83,6 @@ Kernel Config:
   Changed: 7
 
 PACKAGECONFIG:
-  Packages Added:   2
-  Packages Removed: 1
-  Packages Changed: 8
   Features Added:   12
   Features Removed: 4
   Features Changed: 6
@@ -161,6 +168,21 @@ Examples
 
 ### Console output only (no JSON file):
     ./sbom-diff-tool reference.json new.json --format text --full
+
+### Show only changed packages:
+    ./sbom-diff-tool reference.json new.json --show-packages --show-changed
+
+### Show only added packages:
+    ./sbom-diff-tool reference.json new.json --show-packages --show-added
+
+### Show only kernel config changes:
+    ./sbom-diff-tool reference.json new.json --show-config --show-changed
+
+### Show added and changed items across all categories:
+    ./sbom-diff-tool reference.json new.json --show-added --show-changed
+
+### Show only PACKAGECONFIG differences:
+    ./sbom-diff-tool reference.json new.json --show-packageconfig
 
 Console output example:
 ```
