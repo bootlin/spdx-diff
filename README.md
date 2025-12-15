@@ -12,33 +12,33 @@ It produces both human-readable output (console) and a structured JSON diff file
 
 Usage
 -----
-    ./sbom-diff reference.json new.json [OPTIONS]
+```bash
+./sbom-diff reference.json new.json [OPTIONS]
+```
 
 Required arguments:
-  reference              Path to the baseline SPDX3 JSON file.
-  new                    Path to the newer SPDX3 JSON file.
+  - `reference`: Path to the baseline SPDX3 JSON file.
+  - `new`: Path to the newer SPDX3 JSON file.
 
 Optional arguments:
-  --full                 Show all entries (added, removed, changed), not only differences.
-  --output <file>        Save diff results to the given JSON file.
-                         Default: spdx_diff_<timestamp>.json
-  --ignore-proprietary   Ignore packages with LicenseRef-Proprietary.
-  --summary              Show only summary statistics without detailed differences.
-  --format {text,json,both}
-                         Control output format:
-                         - text: Console output only (no JSON file)
-                         - json: JSON file only (silent mode for automation)
-                         - both: Both console and JSON output (default)
+  - `--full`: Show all entries (added, removed, changed), not only differences.
+  - `--output <file>`: Save diff results to the given JSON file. Default: `spdx_diff_<timestamp>.json`
+  - `--ignore-proprietary`: Ignore packages with LicenseRef-Proprietary.
+  - `--summary`: Show only summary statistics without detailed differences.
+  - `--format {text,json,both}`: Control output format:
+    - `text`: Console output only (no JSON file)
+    - `json`: JSON file only (silent mode for automation)
+    - `both`: Both console and JSON output (**default**)
 
 Output filtering - change type:
-  --show-added           Show only added items.
-  --show-removed         Show only removed items.
-  --show-changed         Show only changed items.
+  - `--show-added`: Show only added items.
+  - `--show-removed`: Show only removed items.
+  - `--show-changed`: Show only changed items.
 
 Output filtering - category:
-  --show-packages        Show only package differences.
-  --show-config          Show only kernel config differences.
-  --show-packageconfig   Show only PACKAGECONFIG differences.
+  - `--show-packages`: Show only package differences.
+  - `--show-config`: Show only kernel config differences.
+  - `--show-packageconfig`: Show only PACKAGECONFIG differences.
 
 Output
 ------
