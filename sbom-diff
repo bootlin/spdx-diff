@@ -25,8 +25,13 @@ def normalize_package_name(name: str) -> Tuple[str, str]:
         "kernel-6.12.43-00469-g647daef97a89" -> ("kernel", "6.12.43-00469-g647daef97a89")
         "kernel-module-8021q-6.12.43-00469-g647daef97a89" -> ("kernel-module-8021q", "6.12.43-00469-g647daef97a89")
     """
-    # Pattern to match kernel version suffixes like "6.12.43-00469-g647daef97a89"
-    kernel_version_pattern = r'-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+-\d+-g[a-f0-9]+)?)$'
+    # Pattern to match kernel version suffixes
+    # Matches: X.Y.Z followed by any combination of alphanumeric, dots, underscores, hyphens
+    # Examples:
+    #   - 6.12.43-linux-00469-g647daef97a89 (git-based)
+    #   - 6.6.111-yocto-standard (branch-based)
+    #   - 6.1.38-rt13 (RT kernel)
+    kernel_version_pattern = r'-(\d+\.\d+(?:\.\d+)?[a-zA-Z0-9._-]*)$'
 
     match = re.search(kernel_version_pattern, name)
     if match:
