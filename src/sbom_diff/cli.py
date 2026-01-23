@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #
 # SPDX-License-Identifier: GPL-2.0
 
@@ -10,9 +9,7 @@ import re
 from argparse import ArgumentParser
 from datetime import datetime
 from typing import Dict, Set, Tuple, List, Any
-
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-
+from . import __version__
 
 def normalize_package_name(name: str) -> Tuple[str, str]:
     """
@@ -76,7 +73,7 @@ def extract_spdx_data(
         logging.error("SPDX3 file format is not recognized.")
         return {}, {}, {}
 
-    logging.info(f"Found {len(graph)} elements in the SPDX3 document.")
+    logging.debug(f"Found {len(graph)} elements in the SPDX3 document.")
 
     packages: Dict[str, str] = {}
     config: Dict[str, Any] = {}
@@ -143,7 +140,7 @@ def extract_spdx_data(
     if build_count == 0:
         logging.warning("No build_Build objects found.")
 
-    logging.info(
+    logging.debug(
         f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, "
         f"and {len(packageconfig_dict)} packages with PACKAGECONFIG entries."
     )
@@ -383,6 +380,17 @@ def main() -> None:
     parser = ArgumentParser(
         description="Compare SPDX3 JSON files for packages, kernel config, and PACKAGECONFIG"
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"sbom-diff {__version__}"
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v for INFO, -vv for DEBUG)"
+    )
     parser.add_argument("reference", help="Reference SPDX3 JSON file")
     parser.add_argument("new", help="New SPDX3 JSON file")
     parser.add_argument(
@@ -443,6 +451,17 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    log_level = logging.WARNING
+    if args.verbose >= 2:
+        log_level = logging.DEBUG
+    elif args.verbose == 1:
+        log_level = logging.INFO
+
+    logging.basicConfig(
+        level=log_level,
+        format="[%(levelname)s] %(message)s"
+    )
 
     if not os.path.isfile(args.reference) or not os.path.isfile(args.new):
         logging.error("One or both input files do not exist.")
