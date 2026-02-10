@@ -6,7 +6,7 @@ import logging
 import pathlib
 import re
 from argparse import ArgumentParser
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
 from . import __version__
@@ -502,7 +502,7 @@ def main() -> None:
 
     logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
 
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(tz=timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
     if args.output is None:
         args.output = pathlib.Path(f"spdx_diff_{timestamp}.json")
 
