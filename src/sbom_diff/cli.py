@@ -423,7 +423,7 @@ def main() -> None:
     parser.add_argument(
         "--full",
         action="store_true",
-        help="Show full diff output (added, removed, changed)",
+        help="For console output, always show section names (added, removed, changed)",
     )
     parser.add_argument(
         "--output",

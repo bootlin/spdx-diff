@@ -21,8 +21,10 @@ Required arguments:
   - `new`: Path to the newer SPDX3 JSON file.
 
 Optional arguments:
-  - `--full`: Show all entries (added, removed, changed), not only differences.
-  - `--output <file>`: Save diff results to the given JSON file. Default: `spdx_diff_<timestamp>.json`
+  - `--full`: For console output, always show section names (added, removed,
+    changed) even if there is no difference.
+  - `--output <file>`: Save diff results to the given JSON file.
+    Default: `spdx_diff_<timestamp>.json`
   - `--ignore-proprietary`: Ignore packages with LicenseRef-Proprietary.
   - `--summary`: Show only summary statistics without detailed differences.
   - `--format {text,json,both}`: Control output format:
@@ -126,7 +128,8 @@ The output file (default: spdx_diff_<timestamp>.json) contains a structured diff
 
 PACKAGECONFIG Structure
 -----------------------
-PACKAGECONFIG entries are tracked per package, showing which features are enabled/disabled for each specific package:
+PACKAGECONFIG entries are tracked per package, showing which features are
+enabled/disabled for each specific package:
 
 Console output example:
 ```
