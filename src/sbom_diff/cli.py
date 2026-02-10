@@ -3,48 +3,49 @@
 
 import json
 import logging
-import sys
 import os
 import re
+import sys
 from argparse import ArgumentParser
 from datetime import datetime
-from typing import Dict, Set, Tuple, List, Any
+from typing import Any, Dict, Tuple
+
 from . import __version__
 
-def normalize_package_name(name: str) -> Tuple[str, str]:
+
+def normalize_package_name(name: str) -> str:
     """
     Normalize package names, especially for kernel and kernel-modules.
 
     Returns:
-        tuple: (normalized_name, version_suffix)
+        The normalized package name
 
     Examples:
-        "kernel-6.12.43-00469-g647daef97a89" -> ("kernel", "6.12.43-00469-g647daef97a89")
-        "kernel-module-8021q-6.12.43-00469-g647daef97a89" -> ("kernel-module-8021q", "6.12.43-00469-g647daef97a89")
+        "kernel-6.12.43-00469-g647daef97a89" -> "kernel"
+        "kernel-module-8021q-6.12.43-00469-g647daef97a89" -> "kernel-module-8021q"
+
     """
     # Pattern to match kernel version suffixes
-    # Matches: X.Y.Z followed by any combination of alphanumeric, dots, underscores, hyphens
+    # Matches: X.Y.Z followed by any combination of alphanumeric, dots, underscores,
+    # hyphens
     # Examples:
     #   - 6.12.43-linux-00469-g647daef97a89 (git-based)
     #   - 6.6.111-yocto-standard (branch-based)
     #   - 6.1.38-rt13 (RT kernel)
-    kernel_version_pattern = r'-(\d+\.\d+(?:\.\d+)?[a-zA-Z0-9._-]*)$'
+    kernel_version_pattern = r"-(\d+\.\d+(?:\.\d+)?[a-zA-Z0-9._-]*)$"
 
     match = re.search(kernel_version_pattern, name)
-    if match:
-        version_suffix = match.group(1)
-        normalized = name[:match.start()]
-        return normalized, version_suffix
-
-    return name, ""
+    return name[: match.start()] if match else name
 
 
 def extract_spdx_data(
     json_path: str, ignore_proprietary: bool = False
 ) -> Tuple[Dict[str, str], Dict[str, Any], Dict[str, Dict[str, str]]]:
     """
-    Extract SPDX package data, kernel CONFIG options, and PACKAGECONFIG entries from a JSON file.
-    Kernel packages are automatically normalized.
+    Extract SPDX information (packages, kernel CONFIG, and PACKAGECONFIG).
+
+    Extract SPDX package data, kernel CONFIG options, and PACKAGECONFIG entries from
+    the SPDX JSON file. Kernel packages are automatically normalized.
 
     Args:
         json_path: Path to the SPDX3 JSON file
@@ -54,14 +55,15 @@ def extract_spdx_data(
         tuple[dict, dict, dict]:
             - packages: mapping of package names to versions
             - config: mapping of CONFIG_* keys to their values
-            - packageconfig_dict: mapping of package names to their PACKAGECONFIG features
+            - packageconfig: mapping of package names to their PACKAGECONFIG features
+
     """
     logging.info(f"Opening SPDX file: {json_path}")
     try:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, IOError) as e:
-        logging.error(f"Failed to read or parse {json_path}: {e}")
+    except (OSError, json.JSONDecodeError) as e:
+        logging.exception(f"Failed to read or parse {json_path}: {e}")
         return {}, {}, {}
 
     graph = (
@@ -77,7 +79,7 @@ def extract_spdx_data(
 
     packages: Dict[str, str] = {}
     config: Dict[str, Any] = {}
-    packageconfig_dict: Dict[str, Dict[str, str]] = {}
+    packageconfig: Dict[str, Dict[str, str]] = {}
     build_count = 0
 
     for item in graph:
@@ -101,7 +103,7 @@ def extract_spdx_data(
 
             # Always normalize kernel package names
             if name.startswith("kernel-") or name == "kernel":
-                normalized_name, version_suffix = normalize_package_name(name)
+                normalized_name = normalize_package_name(name)
                 packages[normalized_name] = version
             else:
                 packages[name] = version
@@ -130,21 +132,21 @@ def extract_spdx_data(
                     config[key] = value
                 elif key.startswith("PACKAGECONFIG"):
                     if pkg_name:
-                        if pkg_name not in packageconfig_dict:
-                            packageconfig_dict[pkg_name] = {}
+                        if pkg_name not in packageconfig:
+                            packageconfig[pkg_name] = {}
 
                         if ":" in key:
                             feature = key.split(":", 1)[1]
-                            packageconfig_dict[pkg_name][feature] = value
+                            packageconfig[pkg_name][feature] = value
 
     if build_count == 0:
         logging.warning("No build_Build objects found.")
 
     logging.debug(
         f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, "
-        f"and {len(packageconfig_dict)} packages with PACKAGECONFIG entries."
+        f"and {len(packageconfig)} packages with PACKAGECONFIG entries."
     )
-    return packages, config, packageconfig_dict
+    return packages, config, packageconfig
 
 
 def compare_dicts(
@@ -159,6 +161,7 @@ def compare_dicts(
 
     Returns:
         tuple[dict, dict, dict]: added, removed, changed items
+
     """
     added = {k: v for k, v in new.items() if k not in ref}
     removed = {k: v for k, v in ref.items() if k not in new}
@@ -170,7 +173,9 @@ def compare_dicts(
 
 def compare_packageconfig(
     ref_pcfg: Dict[str, Dict[str, str]], new_pcfg: Dict[str, Dict[str, str]]
-) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]]:
+) -> Tuple[
+    Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
+]:
     """
     Compare PACKAGECONFIG dictionaries.
 
@@ -180,6 +185,7 @@ def compare_packageconfig(
 
     Returns:
         tuple: added packages, removed packages, changed features per package
+
     """
     added_pkgs = {k: v for k, v in new_pcfg.items() if k not in ref_pcfg}
     removed_pkgs = {k: v for k, v in ref_pcfg.items() if k not in new_pcfg}
@@ -190,8 +196,12 @@ def compare_packageconfig(
             ref_features = ref_pcfg[pkg]
             new_features = new_pcfg[pkg]
 
-            added_features = {k: v for k, v in new_features.items() if k not in ref_features}
-            removed_features = {k: v for k, v in ref_features.items() if k not in new_features}
+            added_features = {
+                k: v for k, v in new_features.items() if k not in ref_features
+            }
+            removed_features = {
+                k: v for k, v in ref_features.items() if k not in new_features
+            }
             changed_features = {
                 k: {"from": ref_features[k], "to": new_features[k]}
                 for k in ref_features
@@ -209,9 +219,14 @@ def compare_packageconfig(
 
 
 def print_diff(
-    title: str, added: Any, removed: Any, changed: Any = None,
-    show_all: bool = False, show_added: bool = True,
-    show_removed: bool = True, show_changed: bool = True
+    title: str,
+    added: Any,
+    removed: Any,
+    changed: Any = None,
+    show_all: bool = False,
+    show_added: bool = True,
+    show_removed: bool = True,
+    show_changed: bool = True,
 ) -> None:
     """
     Print differences between items.
@@ -225,6 +240,7 @@ def print_diff(
         show_added: Whether to show added items
         show_removed: Whether to show removed items
         show_changed: Whether to show changed items
+
     """
     if show_added and (show_all or added):
         print(f"\n{title} - Added:")
@@ -249,7 +265,7 @@ def print_packageconfig_diff(
     show_all: bool = False,
     show_added: bool = True,
     show_removed: bool = True,
-    show_changed: bool = True
+    show_changed: bool = True,
 ) -> None:
     """
     Print PACKAGECONFIG differences.
@@ -262,23 +278,24 @@ def print_packageconfig_diff(
         show_added: Whether to show added items
         show_removed: Whether to show removed items
         show_changed: Whether to show changed items
+
     """
     if show_added and (show_all or added):
-        print(f"\nPACKAGECONFIG - Added Packages:")
+        print("\nPACKAGECONFIG - Added Packages:")
         for pkg in sorted(added):
             print(f" + {pkg}:")
             for feature, value in sorted(added[pkg].items()):
                 print(f"     {feature}: {value}")
 
     if show_removed and (show_all or removed):
-        print(f"\nPACKAGECONFIG - Removed Packages:")
+        print("\nPACKAGECONFIG - Removed Packages:")
         for pkg in sorted(removed):
             print(f" - {pkg}:")
             for feature, value in sorted(removed[pkg].items()):
                 print(f"     {feature}: {value}")
 
     if show_changed and (show_all or changed):
-        print(f"\nPACKAGECONFIG - Changed Packages:")
+        print("\nPACKAGECONFIG - Changed Packages:")
         for pkg in sorted(changed):
             print(f" ~ {pkg}:")
             pkg_changes = changed[pkg]
@@ -296,7 +313,9 @@ def print_packageconfig_diff(
 def print_summary(
     pkg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
     cfg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    pcfg_diff: Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]],
+    pcfg_diff: Tuple[
+        Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
+    ],
 ) -> None:
     """
     Print summary statistics of differences.
@@ -305,28 +324,33 @@ def print_summary(
         pkg_diff: Package differences
         cfg_diff: Kernel config differences
         pcfg_diff: PACKAGECONFIG differences
+
     """
     print("\nSPDX-SBOM-Diff Summary:\n")
 
-    print(f"Packages:")
+    print("Packages:")
     print(f"  Added:   {len(pkg_diff[0])}")
     print(f"  Removed: {len(pkg_diff[1])}")
     print(f"  Changed: {len(pkg_diff[2])}")
 
-    print(f"\nKernel Config:")
+    print("\nKernel Config:")
     print(f"  Added:   {len(cfg_diff[0])}")
     print(f"  Removed: {len(cfg_diff[1])}")
     print(f"  Changed: {len(cfg_diff[2])}")
 
-    print(f"\nPACKAGECONFIG:")
+    print("\nPACKAGECONFIG:")
     print(f"  Packages Added:   {len(pcfg_diff[0])}")
     print(f"  Packages Removed: {len(pcfg_diff[1])}")
     print(f"  Packages Changed: {len(pcfg_diff[2])}")
 
     # Count total feature changes
     total_features_added = sum(len(v.get("added", {})) for v in pcfg_diff[2].values())
-    total_features_removed = sum(len(v.get("removed", {})) for v in pcfg_diff[2].values())
-    total_features_changed = sum(len(v.get("changed", {})) for v in pcfg_diff[2].values())
+    total_features_removed = sum(
+        len(v.get("removed", {})) for v in pcfg_diff[2].values()
+    )
+    total_features_changed = sum(
+        len(v.get("changed", {})) for v in pcfg_diff[2].values()
+    )
 
     if total_features_added or total_features_removed or total_features_changed:
         print(f"  Features Added:   {total_features_added}")
@@ -339,7 +363,9 @@ def print_summary(
 def write_diff_to_json(
     pkg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
     cfg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    pcfg_diff: Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]],
+    pcfg_diff: Tuple[
+        Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
+    ],
     output_file: str,
 ) -> None:
     """
@@ -350,6 +376,7 @@ def write_diff_to_json(
         cfg_diff: Differences for kernel config
         pcfg_diff: Differences for PACKAGECONFIG
         output_file: File path to write JSON
+
     """
     logging.info(f"Writing diff results to {output_file}")
     delta = {
@@ -375,21 +402,20 @@ def write_diff_to_json(
 
 def main() -> None:
     """
-    Main entry point: parse arguments, extract SPDX data, compare, and print/write diffs.
+    Main entry point.
+
+    Parse arguments, extract SPDX data, compare, and print/write diffs.
     """
-    parser = ArgumentParser(
-        description="Compare SPDX3 JSON files for packages, kernel config, and PACKAGECONFIG"
+    parser = ArgumentParser(description="Compare SPDX3 JSON files")
+    parser.add_argument(
+        "--version", action="version", version=f"sbom-diff {__version__}"
     )
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"sbom-diff {__version__}"
-    )
-    parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="count",
         default=0,
-        help="Increase verbosity (-v for INFO, -vv for DEBUG)"
+        help="Increase verbosity (-v for INFO, -vv for DEBUG)",
     )
     parser.add_argument("reference", help="Reference SPDX3 JSON file")
     parser.add_argument("new", help="New SPDX3 JSON file")
@@ -458,10 +484,7 @@ def main() -> None:
     elif args.verbose == 1:
         log_level = logging.INFO
 
-    logging.basicConfig(
-        level=log_level,
-        format="[%(levelname)s] %(message)s"
-    )
+    logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
 
     if not os.path.isfile(args.reference) or not os.path.isfile(args.new):
         logging.error("One or both input files do not exist.")
@@ -473,13 +496,25 @@ def main() -> None:
 
     # Determine what to show based on flags
     # If no specific show flags are set, show everything
-    show_added = args.show_added or not (args.show_added or args.show_removed or args.show_changed)
-    show_removed = args.show_removed or not (args.show_added or args.show_removed or args.show_changed)
-    show_changed = args.show_changed or not (args.show_added or args.show_removed or args.show_changed)
+    show_added = args.show_added or not (
+        args.show_added or args.show_removed or args.show_changed
+    )
+    show_removed = args.show_removed or not (
+        args.show_added or args.show_removed or args.show_changed
+    )
+    show_changed = args.show_changed or not (
+        args.show_added or args.show_removed or args.show_changed
+    )
 
-    show_packages = args.show_packages or not (args.show_packages or args.show_config or args.show_packageconfig)
-    show_config = args.show_config or not (args.show_packages or args.show_config or args.show_packageconfig)
-    show_packageconfig = args.show_packageconfig or not (args.show_packages or args.show_config or args.show_packageconfig)
+    show_packages = args.show_packages or not (
+        args.show_packages or args.show_config or args.show_packageconfig
+    )
+    show_config = args.show_config or not (
+        args.show_packages or args.show_config or args.show_packageconfig
+    )
+    show_packageconfig = args.show_packageconfig or not (
+        args.show_packages or args.show_config or args.show_packageconfig
+    )
 
     ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(
         args.reference, ignore_proprietary=args.ignore_proprietary
@@ -497,14 +532,31 @@ def main() -> None:
         print_summary(pkg_diff, cfg_diff, pcfg_diff)
     elif args.format in ["text", "both"]:
         if show_packages:
-            print_diff("Packages", *pkg_diff, show_all=args.full,
-                      show_added=show_added, show_removed=show_removed, show_changed=show_changed)
+            print_diff(
+                "Packages",
+                *pkg_diff,
+                show_all=args.full,
+                show_added=show_added,
+                show_removed=show_removed,
+                show_changed=show_changed,
+            )
         if show_config:
-            print_diff("Kernel Config", *cfg_diff, show_all=args.full,
-                      show_added=show_added, show_removed=show_removed, show_changed=show_changed)
+            print_diff(
+                "Kernel Config",
+                *cfg_diff,
+                show_all=args.full,
+                show_added=show_added,
+                show_removed=show_removed,
+                show_changed=show_changed,
+            )
         if show_packageconfig:
-            print_packageconfig_diff(*pcfg_diff, show_all=args.full,
-                                    show_added=show_added, show_removed=show_removed, show_changed=show_changed)
+            print_packageconfig_diff(
+                *pcfg_diff,
+                show_all=args.full,
+                show_added=show_added,
+                show_removed=show_removed,
+                show_changed=show_changed,
+            )
 
     if args.format in ["json", "both"]:
         write_diff_to_json(pkg_diff, cfg_diff, pcfg_diff, args.output)
