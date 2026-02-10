@@ -12,6 +12,8 @@ from typing import Any, Dict, Tuple
 
 from . import __version__
 
+_logger = logging.getLogger(__name__)
+
 
 def normalize_package_name(name: str) -> str:
     """
@@ -58,12 +60,12 @@ def extract_spdx_data(
             - packageconfig: mapping of package names to their PACKAGECONFIG features
 
     """
-    logging.info(f"Opening SPDX file: {json_path}")
+    _logger.info("Opening SPDX file: %s", json_path)
     try:
         with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
-        logging.exception(f"Failed to read or parse {json_path}: {e}")
+        _logger.exception("Failed to read or parse %s: %s", json_path, e)
         return {}, {}, {}
 
     graph = (
@@ -72,10 +74,10 @@ def extract_spdx_data(
         or (data if isinstance(data, list) else [])
     )
     if not isinstance(graph, list):
-        logging.error("SPDX3 file format is not recognized.")
+        _logger.error("SPDX3 file format is not recognized.")
         return {}, {}, {}
 
-    logging.debug(f"Found {len(graph)} elements in the SPDX3 document.")
+    _logger.debug("Found %d elements in the SPDX3 document.", len(graph))
 
     packages: Dict[str, str] = {}
     config: Dict[str, Any] = {}
@@ -92,7 +94,7 @@ def extract_spdx_data(
             if not name or not version:
                 continue
             if ignore_proprietary and license_expr == "LicenseRef-Proprietary":
-                logging.info(f"Ignoring proprietary package: {name}")
+                _logger.info("Ignoring proprietary package: %s", name)
                 continue
             if (
                 name.endswith((".tar.gz", ".tar.xz", ".tar.bz2", ".zip"))
@@ -140,11 +142,14 @@ def extract_spdx_data(
                             packageconfig[pkg_name][feature] = value
 
     if build_count == 0:
-        logging.warning("No build_Build objects found.")
+        _logger.warning("No build_Build objects found.")
 
-    logging.debug(
-        f"Extracted {len(packages)} packages, {len(config)} CONFIG_*, "
-        f"and {len(packageconfig)} packages with PACKAGECONFIG entries."
+    _logger.debug(
+        "Extracted %d packages, %d CONFIG_*, "
+        "and %d packages with PACKAGECONFIG entries.",
+        len(packages),
+        len(config),
+        len(packageconfig),
     )
     return packages, config, packageconfig
 
@@ -378,7 +383,7 @@ def write_diff_to_json(
         output_file: File path to write JSON
 
     """
-    logging.info(f"Writing diff results to {output_file}")
+    _logger.info("Writing diff results to %s", output_file)
     delta = {
         "package_diff": {
             "added": dict(sorted(pkg_diff[0].items())),
@@ -487,7 +492,7 @@ def main() -> None:
     logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
 
     if not os.path.isfile(args.reference) or not os.path.isfile(args.new):
-        logging.error("One or both input files do not exist.")
+        _logger.error("One or both input files do not exist.")
         sys.exit(1)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
