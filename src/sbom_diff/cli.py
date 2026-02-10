@@ -193,29 +193,29 @@ def compare_packageconfig(
     removed_pkgs = {k: v for k, v in ref_pcfg.items() if k not in new_pcfg}
 
     changed_pkgs = {}
-    for pkg in ref_pcfg:
-        if pkg in new_pcfg:
-            ref_features = ref_pcfg[pkg]
-            new_features = new_pcfg[pkg]
+    for pkg, ref_features in ref_pcfg.items():
+        new_features = new_pcfg.get(pkg)
+        if new_features is None:
+            continue
 
-            added_features = {
-                k: v for k, v in new_features.items() if k not in ref_features
-            }
-            removed_features = {
-                k: v for k, v in ref_features.items() if k not in new_features
-            }
-            changed_features = {
-                k: {"from": ref_features[k], "to": new_features[k]}
-                for k in ref_features
-                if k in new_features and ref_features[k] != new_features[k]
-            }
+        added_features = {
+            k: v for k, v in new_features.items() if k not in ref_features
+        }
+        removed_features = {
+            k: v for k, v in ref_features.items() if k not in new_features
+        }
+        changed_features = {
+            k: {"from": ref_features[k], "to": new_features[k]}
+            for k in ref_features
+            if k in new_features and ref_features[k] != new_features[k]
+        }
 
-            if added_features or removed_features or changed_features:
-                changed_pkgs[pkg] = {
-                    "added": added_features,
-                    "removed": removed_features,
-                    "changed": changed_features,
-                }
+        if added_features or removed_features or changed_features:
+            changed_pkgs[pkg] = {
+                "added": added_features,
+                "removed": removed_features,
+                "changed": changed_features,
+            }
 
     return added_pkgs, removed_pkgs, changed_pkgs
 
