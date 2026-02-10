@@ -8,7 +8,7 @@ import re
 from argparse import ArgumentParser
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from . import __version__
 
@@ -42,7 +42,7 @@ def normalize_package_name(name: str) -> str:
 
 def extract_spdx_data(
     json_path: pathlib.Path, ignore_proprietary: bool = False
-) -> Tuple[Dict[str, str], Dict[str, Any], Dict[str, Dict[str, str]]]:
+) -> tuple[dict[str, str], dict[str, Any], dict[str, dict[str, str]]]:
     """
     Extract SPDX information (packages, kernel CONFIG, and PACKAGECONFIG).
 
@@ -73,9 +73,9 @@ def extract_spdx_data(
 
     _logger.debug("Found %d elements in the SPDX3 document.", len(graph))
 
-    packages: Dict[str, str] = {}
-    config: Dict[str, Any] = {}
-    packageconfig: Dict[str, Dict[str, str]] = defaultdict(dict)
+    packages: dict[str, str] = {}
+    config: dict[str, Any] = {}
+    packageconfig: dict[str, dict[str, str]] = defaultdict(dict)
     build_count = 0
 
     for item in graph:
@@ -139,8 +139,8 @@ def extract_spdx_data(
 
 
 def compare_dicts(
-    ref: Dict[str, Any], new: Dict[str, Any]
-) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    ref: dict[str, Any], new: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """
     Compare two dictionaries and return added, removed, and changed items.
 
@@ -161,9 +161,9 @@ def compare_dicts(
 
 
 def compare_packageconfig(
-    ref_pcfg: Dict[str, Dict[str, str]], new_pcfg: Dict[str, Dict[str, str]]
-) -> Tuple[
-    Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
+    ref_pcfg: dict[str, dict[str, str]], new_pcfg: dict[str, dict[str, str]]
+) -> tuple[
+    dict[str, dict[str, str]], dict[str, dict[str, str]], dict[str, dict[str, Any]]
 ]:
     """
     Compare PACKAGECONFIG dictionaries.
@@ -248,9 +248,9 @@ def print_diff(
 
 
 def print_packageconfig_diff(
-    added: Dict[str, Dict[str, str]],
-    removed: Dict[str, Dict[str, str]],
-    changed: Dict[str, Dict[str, Any]],
+    added: dict[str, dict[str, str]],
+    removed: dict[str, dict[str, str]],
+    changed: dict[str, dict[str, Any]],
     show_all: bool = False,
     show_added: bool = True,
     show_removed: bool = True,
@@ -300,10 +300,10 @@ def print_packageconfig_diff(
 
 
 def print_summary(
-    pkg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    cfg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    pcfg_diff: Tuple[
-        Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
+    pkg_diff: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+    cfg_diff: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+    pcfg_diff: tuple[
+        dict[str, dict[str, str]], dict[str, dict[str, str]], dict[str, dict[str, Any]]
     ],
 ) -> None:
     """
@@ -350,10 +350,10 @@ def print_summary(
 
 
 def write_diff_to_json(
-    pkg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    cfg_diff: Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]],
-    pcfg_diff: Tuple[
-        Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
+    pkg_diff: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+    cfg_diff: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+    pcfg_diff: tuple[
+        dict[str, dict[str, str]], dict[str, dict[str, str]], dict[str, dict[str, Any]]
     ],
     output_file: pathlib.Path,
 ) -> None:
@@ -532,7 +532,7 @@ def main() -> None:
     # Print summary or full output
     if args.summary:
         print_summary(pkg_diff, cfg_diff, pcfg_diff)
-    elif args.format in ["text", "both"]:
+    elif args.format in {"text", "both"}:
         if show_packages:
             print_diff(
                 "Packages",
