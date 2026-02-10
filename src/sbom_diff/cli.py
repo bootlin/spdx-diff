@@ -6,6 +6,7 @@ import logging
 import pathlib
 import re
 from argparse import ArgumentParser
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
@@ -74,26 +75,24 @@ def extract_spdx_data(
 
     packages: Dict[str, str] = {}
     config: Dict[str, Any] = {}
-    packageconfig: Dict[str, Dict[str, str]] = {}
+    packageconfig: Dict[str, Dict[str, str]] = defaultdict(dict)
     build_count = 0
 
     for item in graph:
         # Extract packages
         if item.get("type") == "software_Package":
-            name = item.get("name")
-            version = item.get("software_packageVersion")
-            license_expr = item.get("simplelicensing_licenseExpression", "")
-
+            name: str | None = item.get("name")
+            version: str | None = item.get("software_packageVersion")
             if not name or not version:
                 continue
+
+            license_expr: str | None = item.get("simplelicensing_licenseExpression")
             if ignore_proprietary and license_expr == "LicenseRef-Proprietary":
                 _logger.info("Ignoring proprietary package: %s", name)
                 continue
-            if (
-                name.endswith((".tar.gz", ".tar.xz", ".tar.bz2", ".zip"))
-                or "git" in name
-                or name.startswith("http")
-            ):
+
+            sw_primary_purpose: str | None = item.get("software_primaryPurpose")
+            if sw_primary_purpose != "install":
                 continue
 
             # Always normalize kernel package names
@@ -104,18 +103,15 @@ def extract_spdx_data(
                 packages[name] = version
 
         # Extract kernel config and PACKAGECONFIG
-        if item.get("type", "").endswith("build_Build"):
+        if item.get("type") == "build_Build":
             build_count += 1
 
             build_name = item.get("name", "")
-            pkg_name = None
+            pkg_name: str | None = None
             if ":" in build_name:
-                pkg_name = build_name.split(":")[0]
+                pkg_name, _ = build_name.split(":", maxsplit=1)
 
-            params = item.get("build_parameter", [])
-            if not isinstance(params, list):
-                continue
-            for param in params:
+            for param in item.get("build_parameter", []):
                 if not isinstance(param, dict):
                     continue
                 key = param.get("key")
@@ -125,14 +121,9 @@ def extract_spdx_data(
 
                 if key.startswith("CONFIG_"):
                     config[key] = value
-                elif key.startswith("PACKAGECONFIG"):
-                    if pkg_name:
-                        if pkg_name not in packageconfig:
-                            packageconfig[pkg_name] = {}
-
-                        if ":" in key:
-                            feature = key.split(":", 1)[1]
-                            packageconfig[pkg_name][feature] = value
+                elif key.startswith("PACKAGECONFIG:") and pkg_name:
+                    _, feature = key.split(":", maxsplit=1)
+                    packageconfig[pkg_name][feature] = value
 
     if build_count == 0:
         _logger.warning("No build_Build objects found.")
