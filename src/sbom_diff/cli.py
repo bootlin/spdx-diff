@@ -209,9 +209,10 @@ def compare_packageconfig(
 
 def print_diff(
     title: str,
-    added: Any,
-    removed: Any,
-    changed: Any = None,
+    added: dict[str, Any],
+    removed: dict[str, Any],
+    changed: dict[str, Any],
+    *,
     show_all: bool = False,
     show_added: bool = True,
     show_removed: bool = True,
@@ -251,6 +252,7 @@ def print_packageconfig_diff(
     added: dict[str, dict[str, str]],
     removed: dict[str, dict[str, str]],
     changed: dict[str, dict[str, Any]],
+    *,
     show_all: bool = False,
     show_added: bool = True,
     show_removed: bool = True,
