@@ -234,12 +234,12 @@ def print_diff(
     """
     if show_added and (show_all or added):
         print(f"\n{title} - Added:")
-        for k in sorted(added) if isinstance(added, dict) else added:
+        for k in sorted(added):
             print(f" + {k}" if isinstance(added, list) else f" + {k}: {added[k]}")
 
     if show_removed and (show_all or removed):
         print(f"\n{title} - Removed:")
-        for k in sorted(removed) if isinstance(removed, dict) else removed:
+        for k in sorted(removed):
             print(f" - {k}" if isinstance(removed, list) else f" - {k}: {removed[k]}")
 
     if show_changed and changed and (show_all or changed):
@@ -497,25 +497,17 @@ def main() -> None:
 
     # Determine what to show based on flags
     # If no specific show flags are set, show everything
-    show_added = args.show_added or not (
-        args.show_added or args.show_removed or args.show_changed
-    )
-    show_removed = args.show_removed or not (
-        args.show_added or args.show_removed or args.show_changed
-    )
-    show_changed = args.show_changed or not (
-        args.show_added or args.show_removed or args.show_changed
-    )
+    show_all_change = not (args.show_added or args.show_removed or args.show_changed)
+    show_added = args.show_added or show_all_change
+    show_removed = args.show_removed or show_all_change
+    show_changed = args.show_changed or show_all_change
 
-    show_packages = args.show_packages or not (
+    show_all_category = not (
         args.show_packages or args.show_config or args.show_packageconfig
     )
-    show_config = args.show_config or not (
-        args.show_packages or args.show_config or args.show_packageconfig
-    )
-    show_packageconfig = args.show_packageconfig or not (
-        args.show_packages or args.show_config or args.show_packageconfig
-    )
+    show_packages = args.show_packages or show_all_category
+    show_config = args.show_config or show_all_category
+    show_packageconfig = args.show_packageconfig or show_all_category
 
     try:
         ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(
