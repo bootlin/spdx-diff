@@ -3,9 +3,8 @@
 
 import json
 import logging
-import os
+import pathlib
 import re
-import sys
 from argparse import ArgumentParser
 from datetime import datetime
 from typing import Any, Dict, Tuple
@@ -41,7 +40,7 @@ def normalize_package_name(name: str) -> str:
 
 
 def extract_spdx_data(
-    json_path: str, ignore_proprietary: bool = False
+    json_path: pathlib.Path, ignore_proprietary: bool = False
 ) -> Tuple[Dict[str, str], Dict[str, Any], Dict[str, Dict[str, str]]]:
     """
     Extract SPDX information (packages, kernel CONFIG, and PACKAGECONFIG).
@@ -62,11 +61,10 @@ def extract_spdx_data(
     """
     _logger.info("Opening SPDX file: %s", json_path)
     try:
-        with open(json_path, encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8") as f:
             data = json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
-        _logger.exception("Failed to read or parse %s: %s", json_path, e)
-        return {}, {}, {}
+    except (OSError, ValueError) as e:
+        raise ValueError("Failed to read or parse %s", json_path) from e
 
     graph = (
         data.get("graph")
@@ -74,8 +72,7 @@ def extract_spdx_data(
         or (data if isinstance(data, list) else [])
     )
     if not isinstance(graph, list):
-        _logger.error("SPDX3 file format is not recognized.")
-        return {}, {}, {}
+        raise ValueError("SPDX3 file format is not recognized.")
 
     _logger.debug("Found %d elements in the SPDX3 document.", len(graph))
 
@@ -371,7 +368,7 @@ def write_diff_to_json(
     pcfg_diff: Tuple[
         Dict[str, Dict[str, str]], Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]
     ],
-    output_file: str,
+    output_file: pathlib.Path,
 ) -> None:
     """
     Write diff results to a JSON file.
@@ -401,7 +398,7 @@ def write_diff_to_json(
             "changed": dict(sorted(pcfg_diff[2].items())),
         },
     }
-    with open(output_file, "w", encoding="utf-8") as f:
+    with output_file.open("w", encoding="utf-8") as f:
         json.dump(delta, f, indent=2, ensure_ascii=False)
 
 
@@ -422,15 +419,29 @@ def main() -> None:
         default=0,
         help="Increase verbosity (-v for INFO, -vv for DEBUG)",
     )
-    parser.add_argument("reference", help="Reference SPDX3 JSON file")
-    parser.add_argument("new", help="New SPDX3 JSON file")
+    parser.add_argument(
+        "reference",
+        metavar="PATH",
+        type=pathlib.Path,
+        help="Reference SPDX3 JSON file",
+    )
+    parser.add_argument(
+        "new",
+        metavar="PATH",
+        type=pathlib.Path,
+        help="New SPDX3 JSON file",
+    )
     parser.add_argument(
         "--full",
         action="store_true",
         help="Show full diff output (added, removed, changed)",
     )
     parser.add_argument(
-        "--output", default=None, help="Optional output file name (JSON)"
+        "--output",
+        "-o",
+        metavar="PATH",
+        type=pathlib.Path,
+        help="Optional output file name (JSON)",
     )
     parser.add_argument(
         "--ignore-proprietary",
@@ -491,13 +502,9 @@ def main() -> None:
 
     logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
 
-    if not os.path.isfile(args.reference) or not os.path.isfile(args.new):
-        _logger.error("One or both input files do not exist.")
-        sys.exit(1)
-
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.output is None:
-        args.output = f"spdx_diff_{timestamp}.json"
+        args.output = pathlib.Path(f"spdx_diff_{timestamp}.json")
 
     # Determine what to show based on flags
     # If no specific show flags are set, show everything
@@ -521,12 +528,15 @@ def main() -> None:
         args.show_packages or args.show_config or args.show_packageconfig
     )
 
-    ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(
-        args.reference, ignore_proprietary=args.ignore_proprietary
-    )
-    new_pkgs, new_cfg, new_pcfg = extract_spdx_data(
-        args.new, ignore_proprietary=args.ignore_proprietary
-    )
+    try:
+        ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(
+            args.reference, ignore_proprietary=args.ignore_proprietary
+        )
+        new_pkgs, new_cfg, new_pcfg = extract_spdx_data(
+            args.new, ignore_proprietary=args.ignore_proprietary
+        )
+    except ValueError as e:
+        parser.error(str(e))
 
     pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
     cfg_diff = compare_dicts(ref_cfg, new_cfg)
