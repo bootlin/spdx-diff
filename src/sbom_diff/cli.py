@@ -66,13 +66,9 @@ def extract_spdx_data(
     except (OSError, ValueError) as e:
         raise ValueError("Failed to read or parse %s", json_path) from e
 
-    graph = (
-        data.get("graph")
-        or data.get("@graph")
-        or (data if isinstance(data, list) else [])
-    )
+    graph = data.get("@graph")
     if not isinstance(graph, list):
-        raise ValueError("SPDX3 file format is not recognized.")
+        raise TypeError("SPDX3 file format is not recognized.")
 
     _logger.debug("Found %d elements in the SPDX3 document.", len(graph))
 
@@ -535,7 +531,7 @@ def main() -> None:
         new_pkgs, new_cfg, new_pcfg = extract_spdx_data(
             args.new, ignore_proprietary=args.ignore_proprietary
         )
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         parser.error(str(e))
 
     pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
