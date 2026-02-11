@@ -417,13 +417,11 @@ def main() -> None:
     )
     parser.add_argument(
         "reference",
-        metavar="PATH",
         type=path_is_file,
         help="Reference SPDX3 JSON file",
     )
     parser.add_argument(
         "new",
-        metavar="PATH",
         type=path_is_file,
         help="New SPDX3 JSON file",
     )
