@@ -432,11 +432,14 @@ def main() -> None:
         action="store_true",
         help="For console output, always show section names (added, removed, changed)",
     )
+    timestamp = datetime.now(tz=timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
+    default_output = f"spdx_diff_{timestamp}.json"
     parser.add_argument(
         "--output",
         "-o",
         metavar="PATH",
         type=pathlib.Path,
+        default=default_output,
         help="Optional output file name (JSON)",
     )
     parser.add_argument(
@@ -497,10 +500,6 @@ def main() -> None:
         log_level = logging.INFO
 
     logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
-
-    timestamp = datetime.now(tz=timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
-    if args.output is None:
-        args.output = pathlib.Path(f"spdx_diff_{timestamp}.json")
 
     # Determine what to show based on flags
     # If no specific show flags are set, show everything
