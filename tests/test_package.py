@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-2.0
+
+import pathlib
+
+import pytest
+from helper import ExpectedDiff, run_sbom_diff_check
+
+testdata1 = [
+    ("test-new-package.spdx.json", "4.3"),
+    ("test-new-package-version.spdx.json", "4.4"),
+]
+
+
+@pytest.mark.parametrize("sbom_new_name,i2c_tools_version", testdata1)
+def test_new_pkg_with_proprietary(
+    tmp_dir: pathlib.Path,
+    sbom_data: pathlib.Path,
+    sbom_new_name: str,
+    i2c_tools_version: str,
+) -> None:
+    exp = ExpectedDiff()
+    exp.package_added("example", "0.1")
+    exp.package_added("i2c-tools", i2c_tools_version)
+
+    run_sbom_diff_check(
+        tmp_dir,
+        sbom_data,
+        "reference-sbom.spdx.json",
+        sbom_new_name,
+        exp,
+    )
+
+
+@pytest.mark.parametrize("sbom_new_name,i2c_tools_version", testdata1)
+def test_new_pkg_ign_proprietary(
+    tmp_dir: pathlib.Path,
+    sbom_data: pathlib.Path,
+    sbom_new_name: str,
+    i2c_tools_version: str,
+) -> None:
+    exp = ExpectedDiff()
+    exp.package_added("i2c-tools", i2c_tools_version)
+
+    run_sbom_diff_check(
+        tmp_dir,
+        sbom_data,
+        "reference-sbom.spdx.json",
+        sbom_new_name,
+        exp,
+        ["--ignore-proprietary"],
+    )
+
+
+def test_version_updated(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> None:
+    exp = ExpectedDiff()
+    exp.same_expect_ignore_proprietary = True
+    exp.package_changed("i2c-tools", "4.3", "4.4")
+
+    run_sbom_diff_check(
+        tmp_dir,
+        sbom_data,
+        "test-new-package.spdx.json",
+        "test-new-package-version.spdx.json",
+        exp,
+    )
