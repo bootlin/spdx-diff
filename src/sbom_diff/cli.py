@@ -5,7 +5,7 @@ import json
 import logging
 import pathlib
 import re
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -391,6 +391,13 @@ def write_diff_to_json(
         json.dump(delta, f, indent=2, ensure_ascii=False)
 
 
+def path_is_file(value: str) -> pathlib.Path:
+    """Ensures value is an existing Path or raises and argparse error."""
+    if (path := pathlib.Path(value)).is_file():
+        return path
+    raise ArgumentTypeError(f"{value} is not a path to an existing file!")
+
+
 def main() -> None:
     """
     Main entry point.
@@ -411,13 +418,13 @@ def main() -> None:
     parser.add_argument(
         "reference",
         metavar="PATH",
-        type=pathlib.Path,
+        type=path_is_file,
         help="Reference SPDX3 JSON file",
     )
     parser.add_argument(
         "new",
         metavar="PATH",
-        type=pathlib.Path,
+        type=path_is_file,
         help="New SPDX3 JSON file",
     )
     parser.add_argument(
