@@ -2,9 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [Unreleased]
 
 ### Added
@@ -15,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-## [1.0.0] - 2024-01-24
+## [1.0.0] - 2026-02-12
 
 ### Added
 - Initial stable release of sbom-diff
@@ -23,10 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release Information
 
-**Version:** 1.0.0
-**Release Date:** 2024-01-24
-**Status:** Stable
-**Breaking Changes:** None (initial release)
+- **Version:** 1.0.0
+- **Release Date:** 2026-02-12
+- **Status:** Stable
+- **Breaking Changes:** None (initial release)
 
 This is the first stable release of sbom-diff.
 
