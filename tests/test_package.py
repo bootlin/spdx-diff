@@ -3,7 +3,7 @@
 import pathlib
 
 import pytest
-from helper import ExpectedDiff, run_sbom_diff_check
+from helper import ExpectedDiff, run_spdx_diff_check
 
 testdata1 = [
     ("test-new-package.spdx.json", "4.3"),
@@ -22,7 +22,7 @@ def test_new_pkg_with_proprietary(
     exp.package_added("example", "0.1")
     exp.package_added("i2c-tools", i2c_tools_version)
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "reference-sbom.spdx.json",
@@ -41,7 +41,7 @@ def test_new_pkg_ign_proprietary(
     exp = ExpectedDiff()
     exp.package_added("i2c-tools", i2c_tools_version)
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "reference-sbom.spdx.json",
@@ -56,7 +56,7 @@ def test_version_updated(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> None
     exp.same_expect_ignore_proprietary = True
     exp.package_changed("i2c-tools", "4.3", "4.4")
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "test-new-package.spdx.json",

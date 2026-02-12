@@ -15,11 +15,11 @@ jobs:
           - "3.14"
     steps:
       - uses: actions/checkout@v5
-      - name: Checkout meta-sbom-diff-test for tests
+      - name: Checkout meta-spdx-diff-test for tests
         uses: actions/checkout@v5
         with:
-          repository: bootlin/meta-sbom-diff-test
-          path: meta-sbom-diff-test
+          repository: bootlin/meta-spdx-diff-test
+          path: meta-spdx-diff-test
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -39,7 +39,7 @@ jobs:
           pip install --group test
       - name: Run tests
         env:
-          SBOM_DIFF_SBOM_DATA: ${{ github.workspace }}/meta-sbom-diff-test/sbom-data
+          SPDX_DIFF_SBOM_DATA: ${{ github.workspace }}/meta-spdx-diff-test/sbom-data
         working-directory: tests
         run: |
           pytest -v

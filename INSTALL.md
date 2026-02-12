@@ -3,7 +3,7 @@
 ## Method 1: Quick Install (System-wide)
 
 ```bash
-cd sbom-diff
+cd spdx-diff
 pip install . --break-system-packages
 ```
 
@@ -14,7 +14,7 @@ pip install . --break-system-packages
 ## Method 2: Virtual Environment (Recommended)
 
 ```bash
-cd sbom-diff
+cd spdx-diff
 
 # Create virtual environment
 python3 -m venv .venv
@@ -26,7 +26,7 @@ source .venv/bin/activate
 pip install -e .
 
 # Use the tool
-sbom-diff --help
+spdx-diff --help
 
 # When done
 deactivate
@@ -44,16 +44,16 @@ After installation:
 
 ```bash
 # Show help
-sbom-diff --help
+spdx-diff --help
 
 # Compare two SPDX files
-sbom-diff reference.json new.json
+spdx-diff reference.json new.json
 
 # Show summary only
-sbom-diff reference.json new.json --summary
+spdx-diff reference.json new.json --summary
 
 # JSON output for automation
-sbom-diff reference.json new.json --format json --output results.json
+spdx-diff reference.json new.json --format json --output results.json
 ```
 
 See `README.md` for full documentation.
@@ -64,13 +64,13 @@ See `README.md` for full documentation.
 
 **System-wide:**
 ```bash
-pip uninstall sbom-diff
+pip uninstall spdx-diff
 ```
 
 **Virtual environment:**
 ```bash
 source .venv/bin/activate
-pip uninstall sbom-diff
+pip uninstall spdx-diff
 deactivate
 ```
 

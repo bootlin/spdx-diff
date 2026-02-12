@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.0] - 2026-02-12
 
 ### Added
-- Initial stable release of sbom-diff
+- Initial stable release of spdx-diff
 ---
 
 ## Release Information
@@ -25,10 +25,10 @@ All notable changes to this project will be documented in this file.
 - **Status:** Stable
 - **Breaking Changes:** None (initial release)
 
-This is the first stable release of sbom-diff.
+This is the first stable release of spdx-diff.
 
 ---
 
 <!-- Links -->
-[unreleased]: https://github.com/bootlin/sbom-diff/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/bootlin/sbom-diff/releases/tag/v1.0.0
+[unreleased]: https://github.com/bootlin/spdx-diff/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/bootlin/spdx-diff/releases/tag/v1.0.0

@@ -54,9 +54,3 @@ env/
 *.swp
 *.swo
 *~
-
-# sbom-diff specific
-spdx_diff_*.json
-
-# Old script (if exists)
-sbom-diff

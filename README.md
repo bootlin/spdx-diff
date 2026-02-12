@@ -13,7 +13,7 @@ It produces both human-readable output (console) and a structured JSON diff file
 Usage
 -----
 ```bash
-./sbom-diff reference.json new.json [OPTIONS]
+./spdx-diff reference.json new.json [OPTIONS]
 ```
 
 Required arguments:
@@ -72,7 +72,7 @@ Summary Mode
 When using --summary, the tool displays aggregate statistics:
 
 ```
-SPDX-SBOM-Diff Summary:
+SPDX-Diff Summary:
 
 Packages:
   Added:   5
@@ -158,34 +158,34 @@ Examples
 --------
 
 ### Basic comparison with both console and JSON output:
-    ./sbom-diff reference.json new.json
+    ./spdx-diff reference.json new.json
 
 ### Full details with proprietary packages excluded:
-    ./sbom-diff reference.json new.json --ignore-proprietary --full
+    ./spdx-diff reference.json new.json --ignore-proprietary --full
 
 ### Quick summary check:
-    ./sbom-diff reference.json new.json --summary
+    ./spdx-diff reference.json new.json --summary
 
 ### Silent mode for CI/CD (JSON output only):
-    ./sbom-diff reference.json new.json --format json --output results.json
+    ./spdx-diff reference.json new.json --format json --output results.json
 
 ### Console output only (no JSON file):
-    ./sbom-diff reference.json new.json --format text --full
+    ./spdx-diff reference.json new.json --format text --full
 
 ### Show only changed packages:
-    ./sbom-diff reference.json new.json --show-packages --show-changed
+    ./spdx-diff reference.json new.json --show-packages --show-changed
 
 ### Show only added packages:
-    ./sbom-diff reference.json new.json --show-packages --show-added
+    ./spdx-diff reference.json new.json --show-packages --show-added
 
 ### Show only kernel config changes:
-    ./sbom-diff reference.json new.json --show-config --show-changed
+    ./spdx-diff reference.json new.json --show-config --show-changed
 
 ### Show added and changed items across all categories:
-    ./sbom-diff reference.json new.json --show-added --show-changed
+    ./spdx-diff reference.json new.json --show-added --show-changed
 
 ### Show only PACKAGECONFIG differences:
-    ./sbom-diff reference.json new.json --show-packageconfig
+    ./spdx-diff reference.json new.json --show-packageconfig
 
 Console output example:
 ```

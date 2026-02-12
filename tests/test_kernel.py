@@ -2,7 +2,7 @@
 
 import pathlib
 
-from helper import ExpectedDiff, run_sbom_diff_check
+from helper import ExpectedDiff, run_spdx_diff_check
 
 
 def test_new_version(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> None:
@@ -15,7 +15,7 @@ def test_new_version(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> None:
     exp.package_changed("kernel-image-bzimage", old_v, new_v)
     exp.package_changed("kernel-module-uvesafb", old_v, new_v)
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "reference-sbom.spdx.json",
@@ -29,7 +29,7 @@ def test_kernelconfig_n_to_m(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> 
     exp.same_expect_ignore_proprietary = True
     exp.kernel_config_added("CONFIG_AD525X_DPOT", "m")
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "reference-sbom.spdx.json",
@@ -43,7 +43,7 @@ def test_kernelconfig_n_to_y(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> 
     exp.same_expect_ignore_proprietary = True
     exp.kernel_config_added("CONFIG_AD525X_DPOT", "y")
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "reference-sbom.spdx.json",

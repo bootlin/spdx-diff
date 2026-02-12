@@ -379,7 +379,7 @@ def print_summary(
         pcfg_diff: PACKAGECONFIG differences
 
     """
-    print("\nSPDX-SBOM-Diff Summary:\n")
+    print("\nSPDX-Diff Summary:\n")
 
     print("Packages:")
     print(f"  Added:   {len(pkg_diff[0])}")
@@ -468,7 +468,7 @@ def main() -> None:
     """
     parser = ArgumentParser(description="Compare SPDX3 JSON files")
     parser.add_argument(
-        "--version", action="version", version=f"sbom-diff {__version__}"
+        "--version", action="version", version=f"spdx-diff {__version__}"
     )
     parser.add_argument(
         "-v",

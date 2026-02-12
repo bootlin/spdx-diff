@@ -2,7 +2,7 @@
 
 import pathlib
 
-from helper import ExpectedDiff, run_sbom_diff_check
+from helper import ExpectedDiff, run_spdx_diff_check
 
 
 def test_cfg_changed(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> None:
@@ -10,7 +10,7 @@ def test_cfg_changed(tmp_dir: pathlib.Path, sbom_data: pathlib.Path) -> None:
     exp.same_expect_ignore_proprietary = True
     exp.packageconfig_changed_mod("openssl", "no-tls1", "disabled", "enabled")
 
-    run_sbom_diff_check(
+    run_spdx_diff_check(
         tmp_dir,
         sbom_data,
         "reference-sbom.spdx.json",

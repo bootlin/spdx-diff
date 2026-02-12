@@ -8,7 +8,7 @@ from typing import Any
 
 
 def exec_tool(tmp_dir: pathlib.Path, args: list[str]) -> None:
-    cmd = ["sbom-diff"]
+    cmd = ["spdx-diff"]
     cmd.extend(args)
 
     subprocess.run(
@@ -87,7 +87,7 @@ class ExpectedDiff:
         )
 
 
-def _run_sbom_diff_check(
+def _run_spdx_diff_check(
     tmp_dir: pathlib.Path,
     out_name: str,
     sbom_data_path: pathlib.Path,
@@ -116,7 +116,7 @@ def _run_sbom_diff_check(
     exp_diff.check(ret_diff)
 
 
-def run_sbom_diff_check(
+def run_spdx_diff_check(
     tmp_dir: pathlib.Path,
     sbom_data_path: pathlib.Path,
     sbom_ref: str,
@@ -127,7 +127,7 @@ def run_sbom_diff_check(
     if extra_args is None:
         extra_args = []
 
-    _run_sbom_diff_check(
+    _run_spdx_diff_check(
         tmp_dir,
         "diff.json",
         sbom_data_path,
@@ -138,7 +138,7 @@ def run_sbom_diff_check(
     )
 
     if exp_diff.same_expect_ignore_proprietary:
-        _run_sbom_diff_check(
+        _run_spdx_diff_check(
             tmp_dir,
             "diff2.json",
             sbom_data_path,
