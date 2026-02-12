@@ -15,127 +15,189 @@ from . import __version__
 _logger = logging.getLogger(__name__)
 
 
-def normalize_package_name(name: str) -> str:
+class Spdx3Sbom:
     """
-    Normalize package names, especially for kernel and kernel-modules.
+    Class that allow to parse SPDX3 JSON files.
 
-    Returns:
-        The normalized package name
-
-    Examples:
-        "kernel-6.12.43-00469-g647daef97a89" -> "kernel"
-        "kernel-module-8021q-6.12.43-00469-g647daef97a89" -> "kernel-module-8021q"
-
+    :ivar packages: mapping of package names to versions
+    :ivar config: mapping of CONFIG_* keys to their values
+    :ivar packageconfig: mapping of package names to their PACKAGECONFIG features
     """
-    # Pattern to match kernel version suffixes
-    # Matches: X.Y.Z followed by any combination of alphanumeric, dots, underscores,
-    # hyphens
-    # Examples:
-    #   - 6.12.43-linux-00469-g647daef97a89 (git-based)
-    #   - 6.6.111-yocto-standard (branch-based)
-    #   - 6.1.38-rt13 (RT kernel)
-    kernel_version_pattern = r"-(\d+\.\d+(?:\.\d+)?[a-zA-Z0-9._-]*)$"
 
-    match = re.search(kernel_version_pattern, name)
-    return name[: match.start()] if match else name
+    def __init__(self, json_path: pathlib.Path) -> None:
+        """
+        Constructor for Spdx3Sbom class.
 
+        :param json_path: Path the JSON file to parse.
+        """
+        self._graph: list[dict[str, Any]] = []
+        self._map_id_node: dict[str, dict[str, Any]] = {}
+        self._map_rel_license: dict[str, set[str]] = defaultdict(set)
 
-def extract_spdx_data(
-    json_path: pathlib.Path, ignore_proprietary: bool = False
-) -> tuple[dict[str, str], dict[str, Any], dict[str, dict[str, str]]]:
-    """
-    Extract SPDX information (packages, kernel CONFIG, and PACKAGECONFIG).
+        self.packages: dict[str, str] = {}
+        self.config: dict[str, Any] = {}
+        self.packageconfig: dict[str, dict[str, str]] = defaultdict(dict)
 
-    Extract SPDX package data, kernel CONFIG options, and PACKAGECONFIG entries from
-    the SPDX JSON file. Kernel packages are automatically normalized.
+        self._parse(json_path)
 
-    Args:
-        json_path: Path to the SPDX3 JSON file
-        ignore_proprietary: Whether to skip proprietary packages
+    def _parse(self, json_path: pathlib.Path) -> None:
+        """
+        Parse SPDX3 JSON files.
 
-    Returns:
-        tuple[dict, dict, dict]:
-            - packages: mapping of package names to versions
-            - config: mapping of CONFIG_* keys to their values
-            - packageconfig: mapping of package names to their PACKAGECONFIG features
+        :param json_path: Path the JSON file.
+        """
+        _logger.info("Opening SPDX file: %s", json_path)
+        try:
+            with json_path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError) as e:
+            raise ValueError("Failed to read or parse %s", json_path) from e
 
-    """
-    _logger.info("Opening SPDX file: %s", json_path)
-    try:
-        with json_path.open(encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError) as e:
-        raise ValueError("Failed to read or parse %s", json_path) from e
+        graph = data.get("@graph")
+        if not isinstance(graph, list):
+            raise TypeError("SPDX3 file format is not recognized.")
 
-    graph = data.get("@graph")
-    if not isinstance(graph, list):
-        raise TypeError("SPDX3 file format is not recognized.")
+        _logger.debug("Found %d elements in the SPDX3 document.", len(graph))
+        self._graph = graph
 
-    _logger.debug("Found %d elements in the SPDX3 document.", len(graph))
-
-    packages: dict[str, str] = {}
-    config: dict[str, Any] = {}
-    packageconfig: dict[str, dict[str, str]] = defaultdict(dict)
-    build_count = 0
-
-    for item in graph:
-        # Extract packages
-        if item.get("type") == "software_Package":
-            name: str | None = item.get("name")
-            version: str | None = item.get("software_packageVersion")
-            if not name or not version:
+        # Index each nodes
+        for item in graph:
+            # Update map between spdxId and node object
+            spdx_id: str | None = item.get("spdxId")
+            if not spdx_id:
                 continue
 
-            license_expr: str | None = item.get("simplelicensing_licenseExpression")
-            if ignore_proprietary and license_expr == "LicenseRef-Proprietary":
-                _logger.info("Ignoring proprietary package: %s", name)
+            self._map_id_node[spdx_id] = item
+
+            # Update map between element spdxId and one or multiple license spdxId
+            if (
+                item.get("type") == "Relationship"
+                and item.get("relationshipType") == "hasConcludedLicense"
+            ):
+                self._map_rel_license[item["from"]].update(item["to"])
+
+    def is_package_proprietary(self, pkg: dict[str, Any]) -> bool:
+        """
+        Check if the software_Package is a proprietary package.
+
+        :param pkg: The JSON graph node representing a package.
+        :return: True if this is a proprietary package, False otherwise.
+        """
+        spdx_id: str | None = pkg.get("spdxId")
+        if not spdx_id:
+            return False
+
+        license_ids = self._map_rel_license.get(spdx_id)
+        if not license_ids:
+            return False
+
+        for license_id in license_ids:
+            license_node = self._map_id_node.get(license_id)
+            if not license_node:
                 continue
 
-            sw_primary_purpose: str | None = item.get("software_primaryPurpose")
-            if sw_primary_purpose != "install":
+            if license_node.get("type") != "simplelicensing_LicenseExpression":
                 continue
 
-            # Always normalize kernel package names
-            if name.startswith("kernel-") or name == "kernel":
-                normalized_name = normalize_package_name(name)
-                packages[normalized_name] = version
-            else:
-                packages[name] = version
+            if (
+                license_node.get("simplelicensing_licenseExpression")
+                == "LicenseRef-Proprietary"
+            ):
+                return True
 
-        # Extract kernel config and PACKAGECONFIG
-        if item.get("type") == "build_Build":
-            build_count += 1
+        return False
 
-            build_name = item.get("name", "")
-            pkg_name: str | None = None
-            if ":" in build_name:
-                pkg_name, _ = build_name.split(":", maxsplit=1)
+    @staticmethod
+    def normalize_package_name(name: str) -> str:
+        """
+        Normalize package names, especially for kernel and kernel-modules.
 
-            for param in item.get("build_parameter", []):
-                if not isinstance(param, dict):
+        :return: The normalized package name
+
+        Examples:
+            "kernel-6.12.43-00469-g647daef97a89" -> "kernel"
+            "kernel-module-8021q-6.12.43-00469-g647daef97a89" -> "kernel-module-8021q"
+
+        """
+        # Pattern to match kernel version suffixes
+        # Matches: X.Y.Z followed by any combination of alphanumeric, dots, underscores,
+        # hyphens
+        # Examples:
+        #   - 6.12.43-linux-00469-g647daef97a89 (git-based)
+        #   - 6.6.111-yocto-standard (branch-based)
+        #   - 6.1.38-rt13 (RT kernel)
+        kernel_version_pattern = r"-(\d+\.\d+(?:\.\d+)?[a-zA-Z0-9._-]*)$"
+
+        match = re.search(kernel_version_pattern, name)
+        return name[: match.start()] if match else name
+
+    def extract_spdx_data(self, ignore_proprietary: bool = False) -> None:
+        """
+        Extract SPDX information (packages, kernel CONFIG, and PACKAGECONFIG).
+
+        Extract SPDX package data, kernel CONFIG options, and PACKAGECONFIG entries from
+        the SPDX JSON file. Kernel packages are automatically normalized.
+
+        :param ignore_proprietary: Whether to skip proprietary packages
+        """
+        build_count = 0
+
+        for item in self._graph:
+            # Extract packages
+            if item.get("type") == "software_Package":
+                pkg_name: str | None = item.get("name")
+                version: str | None = item.get("software_packageVersion")
+                if not pkg_name or not version:
                     continue
-                key = param.get("key")
-                value = param.get("value")
-                if not key or value is None:
+
+                if ignore_proprietary and self.is_package_proprietary(item):
+                    _logger.info("Ignoring proprietary package: %s", pkg_name)
                     continue
 
-                if key.startswith("CONFIG_"):
-                    config[key] = value
-                elif key.startswith("PACKAGECONFIG:") and pkg_name:
-                    _, feature = key.split(":", maxsplit=1)
-                    packageconfig[pkg_name][feature] = value
+                sw_primary_purpose: str | None = item.get("software_primaryPurpose")
+                if sw_primary_purpose != "install":
+                    continue
 
-    if build_count == 0:
-        _logger.warning("No build_Build objects found.")
+                # Always normalize kernel package names
+                if pkg_name.startswith("kernel-") or pkg_name == "kernel":
+                    normalized_name = self.normalize_package_name(pkg_name)
+                    self.packages[normalized_name] = version
+                else:
+                    self.packages[pkg_name] = version
 
-    _logger.debug(
-        "Extracted %d packages, %d CONFIG_*, "
-        "and %d packages with PACKAGECONFIG entries.",
-        len(packages),
-        len(config),
-        len(packageconfig),
-    )
-    return packages, config, packageconfig
+            # Extract kernel config and PACKAGECONFIG
+            if item.get("type") == "build_Build":
+                build_count += 1
+
+                build_name = item.get("name", "")
+                recipe_name: str | None = None
+                if ":" in build_name:
+                    recipe_name, _ = build_name.split(":", maxsplit=1)
+
+                for param in item.get("build_parameter", []):
+                    if not isinstance(param, dict):
+                        continue
+                    key = param.get("key")
+                    value = param.get("value")
+                    if not key or value is None:
+                        continue
+
+                    if key.startswith("CONFIG_"):
+                        self.config[key] = value
+                    elif key.startswith("PACKAGECONFIG:") and recipe_name:
+                        _, feature = key.split(":", maxsplit=1)
+                        self.packageconfig[recipe_name][feature] = value
+
+        if build_count == 0:
+            _logger.warning("No build_Build objects found.")
+
+        _logger.debug(
+            "Extracted %d packages, %d CONFIG_*, "
+            "and %d packages with PACKAGECONFIG entries.",
+            len(self.packages),
+            len(self.config),
+            len(self.packageconfig),
+        )
 
 
 def compare_dicts(
@@ -514,18 +576,17 @@ def main() -> None:
     show_packageconfig = args.show_packageconfig or show_all_category
 
     try:
-        ref_pkgs, ref_cfg, ref_pcfg = extract_spdx_data(
-            args.reference, ignore_proprietary=args.ignore_proprietary
-        )
-        new_pkgs, new_cfg, new_pcfg = extract_spdx_data(
-            args.new, ignore_proprietary=args.ignore_proprietary
-        )
+        sbom_ref = Spdx3Sbom(args.reference)
+        sbom_ref.extract_spdx_data(args.ignore_proprietary)
+
+        sbom_new = Spdx3Sbom(args.new)
+        sbom_new.extract_spdx_data(args.ignore_proprietary)
     except (ValueError, TypeError) as e:
         parser.error(str(e))
 
-    pkg_diff = compare_dicts(ref_pkgs, new_pkgs)
-    cfg_diff = compare_dicts(ref_cfg, new_cfg)
-    pcfg_diff = compare_packageconfig(ref_pcfg, new_pcfg)
+    pkg_diff = compare_dicts(sbom_ref.packages, sbom_new.packages)
+    cfg_diff = compare_dicts(sbom_ref.config, sbom_new.config)
+    pcfg_diff = compare_packageconfig(sbom_ref.packageconfig, sbom_new.packageconfig)
 
     # Print summary or full output
     if args.summary:
