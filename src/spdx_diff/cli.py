@@ -417,8 +417,15 @@ def write_diff_to_json(
             "changed": dict(sorted(pcfg_diff[2].items())),
         },
     }
-    with output_file.open("w", encoding="utf-8") as f:
-        json.dump(delta, f, indent=2, ensure_ascii=False)
+    # Write the resulting SPDX diff JSON to stdout for piping
+    json.dump(delta, sys.stdout, indent=2, ensure_ascii=False)
+    sys.stdout.write("\n")
+
+    # Write the resulting SPDX diff JSON to file
+    if output_file is not None:
+        _logger.info("Writing diff results to %s", output_file)
+        with output_file.open("w", encoding="utf-8") as f:
+            json.dump(delta, f, indent=2, ensure_ascii=False)
 
 
 def path_is_file(value: str) -> pathlib.Path:
@@ -456,21 +463,13 @@ def main() -> None:
         type=path_is_file,
         help="New SPDX3 JSON file",
     )
-    timestamp = datetime.now(tz=timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
-    default_output = f"spdx_diff_{timestamp}.json"
     parser.add_argument(
-        "--output",
-        "-o",
+        "-j",
+        "--json-output",
         metavar="PATH",
         type=pathlib.Path,
-        default=default_output,
-        help="Optional output file name (JSON)",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["text", "json", "both"],
-        default="both",
-        help="Output format: text (console only), json (file only), or both (default)",
+        default=None,
+        help="JSON Output file name (default: none)",
     )
     parser.add_argument(
         "-H",
