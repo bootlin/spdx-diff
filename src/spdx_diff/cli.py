@@ -5,7 +5,13 @@ import json
 import logging
 import pathlib
 import re
-from argparse import ArgumentParser, ArgumentTypeError, BooleanOptionalAction
+from argparse import (
+    Action,
+    ArgumentParser,
+    ArgumentTypeError,
+    BooleanOptionalAction,
+    HelpFormatter,
+)
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -201,6 +207,32 @@ class Spdx3Sbom:
             len(self.config),
             len(self.packageconfig),
         )
+
+
+class CustomBooleanOptionalActionFormatter(HelpFormatter):
+    """
+    Custom argparse help formatter for BooleanOptionalAction arguments.
+
+    This formatter changes the default argparse rendering of boolean
+    optional flags from:
+
+        --foo, --no-foo
+
+    to the more compact form:
+
+        --[no-]foo
+
+    This only affects the help text display. Argument parsing behavior
+    remains unchanged.
+    """
+
+    def _format_action_invocation(self, action: Action) -> str:
+        if isinstance(action, BooleanOptionalAction):
+            # On prend le nom principal
+            opt = action.option_strings[0]
+            name = opt[2:]  # enlève '--'
+            return f"--[no-]{name}"
+        return super()._format_action_invocation(action)
 
 
 def compare_dicts(
@@ -401,7 +433,8 @@ def main() -> None:
 
     Parse arguments, extract SPDX data, compare, and print/write diffs.
     """
-    parser = ArgumentParser(description="Compare SPDX3 JSON files")
+    parser = ArgumentParser(description="Compare SPDX3 JSON files",
+        formatter_class=CustomBooleanOptionalActionFormatter)
     parser.add_argument(
         "--version", action="version", version=f"spdx-diff {__version__}"
     )
