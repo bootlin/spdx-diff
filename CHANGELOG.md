@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Add custom `HelpFormatter` to render boolean flags in a compact `--[no-]flag` format instead of the default `--flag, --no-flag`.
+- The following filtering category arguments have been renamed and converted to
+boolean options, all defaulting to `True`:
+  - `--show-packages` to `--[no-]packages`(default: --packages)
+  - `--show-config` to `--[no-]kernel-config`(default: --kernel-config)
+  - `--show-packageconfig` to `--[no-]packageconfig`(default: --packageconfig)
+  - `--ignore-proprietary` to `--[no-]packages-proprietary`(default: --packages-proprietary)
+
 ### Fixed
 
 ### Removed
