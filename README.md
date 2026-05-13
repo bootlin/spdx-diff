@@ -8,7 +8,11 @@ This tool compares two SPDX3 JSON documents and reports differences in:
 - Kernel configuration parameters (CONFIG_*)
 - PACKAGECONFIG entries per package
 
-It produces both human-readable output (console) and a structured JSON diff file.
+The application separates human-readable and machine-readable outputs to improve automation and pipeline integration.
+
+- By default, the tool emits structured **JSON output**, making it suitable for consumption by scripts and CI/CD pipelines.
+- The default output format can be changed into a human-readable (text) using --human-readable optional argument.
+- When a JSON filename parameter is provided, the JSON result is also written to the specified file.
 
 Usage
 -----
@@ -21,26 +25,14 @@ Required arguments:
   - `new`: Path to the newer SPDX3 JSON file.
 
 Optional arguments:
-  - `--full`: For console output, always show section names (added, removed,
-    changed) even if there is no difference.
-  - `--output <file>`: Save diff results to the given JSON file.
-    Default: `spdx_diff_<timestamp>.json`
-  - `--ignore-proprietary`: Ignore packages with LicenseRef-Proprietary.
-  - `--summary`: Show only summary statistics without detailed differences.
-  - `--format {text,json,both}`: Control output format:
-    - `text`: Console output only (no JSON file)
-    - `json`: JSON file only (silent mode for automation)
-    - `both`: Both console and JSON output (**default**)
+  - `--json-output <file>`: Save diff results to the given JSON file.
+  - `--human-readable`: Output results in a human-readable text format.
 
-Output filtering - change type:
-  - `--show-added`: Show only added items.
-  - `--show-removed`: Show only removed items.
-  - `--show-changed`: Show only changed items.
-
-Output filtering - category:
-  - `--show-packages`: Show only package differences.
-  - `--show-config`: Show only kernel config differences.
-  - `--show-packageconfig`: Show only PACKAGECONFIG differences.
+Text output filtering - category :
+  - `--[no-]packages`: show|hide package differences.
+  - `--[no-]kernel-config`: show|hide kernel config differences.
+  - `--[no-]packageconfig`: show|hide PACKAGECONFIG differences.
+  - `--[no-]packages-proprietary`: show|hide packages with LicenseRef-Proprietary.
 
 Output
 ------
@@ -67,27 +59,6 @@ Symbols:
   - removed
   ~ changed
 
-Summary Mode
-------------
-When using --summary, the tool displays aggregate statistics:
-
-```
-SPDX-Diff Summary:
-
-Packages:
-  Added:   5
-  Removed: 2
-  Changed: 3
-
-Kernel Config:
-  Added:   10
-  Removed: 3
-  Changed: 7
-
-PACKAGECONFIG:
-  Features Added:   12
-  Features Removed: 4
-  Features Changed: 6
 ```
 
 JSON Diff File
@@ -157,37 +128,25 @@ The script uses Python's logging module:
 Examples
 --------
 
-### Basic comparison with both console and JSON output:
+### Basic comparison with default JSON output on stdout:
     ./spdx-diff reference.json new.json
 
 ### Full details with proprietary packages excluded:
-    ./spdx-diff reference.json new.json --ignore-proprietary --full
+    ./spdx-diff reference.json new.json --no-packages-proprietary
 
-### Quick summary check:
-    ./spdx-diff reference.json new.json --summary
+### Console output for CI/CD:
+    ./spdx-diff reference.json new.json
 
-### Silent mode for CI/CD (JSON output only):
-    ./spdx-diff reference.json new.json --format json --output results.json
+### Console output human-readable:
+    ./spdx-diff reference.json new.json --human-readable
 
-### Console output only (no JSON file):
-    ./spdx-diff reference.json new.json --format text --full
+### Console and JSON output with JSON file generated:
+    ./spdx-diff reference.json new.json --json-output result.json
 
-### Show only changed packages:
-    ./spdx-diff reference.json new.json --show-packages --show-changed
+### Exclude on console PACKAGECONFIG differences:
+    ./spdx-diff reference.json new.json --no-packageconfig
 
-### Show only added packages:
-    ./spdx-diff reference.json new.json --show-packages --show-added
-
-### Show only kernel config changes:
-    ./spdx-diff reference.json new.json --show-config --show-changed
-
-### Show added and changed items across all categories:
-    ./spdx-diff reference.json new.json --show-added --show-changed
-
-### Show only PACKAGECONFIG differences:
-    ./spdx-diff reference.json new.json --show-packageconfig
-
-Console output example:
+Human readable console output example:
 ```
 Packages - Added:
  + libfoo: 2.0
