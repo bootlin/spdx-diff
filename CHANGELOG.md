@@ -74,4 +74,5 @@ This is the first stable release of spdx-diff.
 
 <!-- Links -->
 [unreleased]: https://github.com/bootlin/spdx-diff/compare/v1.0.1...HEAD
+[1.1.0]: https://github.com/bootlin/spdx-diff/releases/tag/v1.1.0
 [1.0.1]: https://github.com/bootlin/spdx-diff/releases/tag/v1.0.1
