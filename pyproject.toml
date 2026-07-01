@@ -20,8 +20,12 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 
-dependencies = [
-    "backports.zstd; python_version < '3.14'"
+[project.optional-dependencies]
+zstd = [
+    "backports.zstd;python_version<'3.14'",
+]
+zstandard = [
+    "zstandard;python_version<'3.14'",
 ]
 
 [project.scripts]
